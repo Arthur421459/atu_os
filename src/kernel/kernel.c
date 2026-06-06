@@ -1,6 +1,7 @@
 #include "lib/bool.h"
 #include "lib/io.h"
 #include "drivers/keyboard.h"
+#include <stdint.h>
 volatile char* tvideo = (volatile char*) 0xB8000;
 int cursor = 0;
 int cursorc = 0;
@@ -14,6 +15,8 @@ extern void irqmaslabel();
 extern void irqslavelabel();
 extern void intlabel();
 extern void set_idt(uint32_t itr);
+
+
 // funções aleatorias
 
 void set_cursor_pos(uint16_t pos) {
@@ -243,6 +246,21 @@ typedef struct {
 } file_entry;
 
 
+extern char bss_start;
+extern char bss_end;
+// void clear_bss() {
+//     uint8_t *p = (uint8_t*)&bss_start;
+//     uint8_t *end = (uint8_t*)&bss_end;
+//     while (p < end) {
+//         *p++ = 0;
+//     }
+// }
+void clear_bss() {
+    uint8_t *p = (uint8_t*)&bss_start;
+    for (int i = 0; i < 15; i++) {
+        p[i] = 0;
+    }
+}
 
 void kernel() {
     config_gdt();

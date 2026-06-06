@@ -15,7 +15,7 @@ OBJ_C = $(patsubst src/%.c, $(BUILD_DIR)/c/%.o, $(SRC_C))
 OBJ_ASM = $(patsubst src/%.asm, $(BUILD_DIR)/asm/%.o, $(SRC_ASM))
 all: kernel.bin hd.img
 
-kernel.bin: $(OBJ_C) $(OBJ_ASM)
+kernel.bin: $(OBJ_C) $(OBJ_ASM) linker/linker.ld
 	ld -m elf_i386 -T linker/linker.ld $(OBJ_ASM) $(OBJ_C) -o kernel.bin
 
 $(BUILD_DIR)/c/%.o: src/%.c

@@ -10,8 +10,10 @@ section .text
 global _start
 global set_gdt
 extern kernel
+extern clear_bss
 extern int_handler
 extern irq_handler
+extern stack_top
 global int0
 global irq0
 global irq1
@@ -22,8 +24,11 @@ global intlabel
 
 _start:
     cli
-    mov esp, 0x90000
+    cld
+    mov esp, stack_top
+    call clear_bss
     call kernel
+    .lp: jmp .lp
 set_gdt:
     mov eax, [esp+4]
     lgdt [eax] ; OMG gdt loaded lol
@@ -67,7 +72,7 @@ irq_common:
     mov es, ax
     mov fs, ax
     mov gs, ax
-    push dword [esp+34]
+    push [esp+34]
     call irq_handler
     add esp, 4
     pop ax
@@ -87,7 +92,7 @@ int_common:
     mov es, ax
     mov fs, ax
     mov gs, ax
-    push dword [esp+34]
+    push [esp+34]
     call int_handler
     add esp, 4
     pop ax
