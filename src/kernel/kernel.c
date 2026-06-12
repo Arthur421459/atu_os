@@ -133,7 +133,6 @@ void int_handler(uint32_t num) {
             break;
     }
 }
-
 void irq_handler(uint32_t irqx) {
     switch (irqx) {
         case 0:
@@ -208,66 +207,22 @@ void config_idt() {
 
 }
 
-
-
-void read_sector(uint32_t lba, uint16_t* buffer, uint8_t sectors) {
-    while ((inb(0x1F7) & 0x80)); // wait ata
-    outb(0x1F2, sectors); // sectors quan
-
-    outb(0x1F3, lba & 0xFF); // lba low
-    outb(0x1F4, (lba >> 8) & 0xFF); // lba mid
-    outb(0x1F5, (lba >> 16) & 0xFF); // lba high
-    outb(0x1F6, 0b11100000 | ((lba >> 24) & 0x0F)); // head/drive & lba end
-
-    outb(0x1F7, 0x20); // READDDDDDDD
-    uint32_t abswords = 0;
-    for (int s = 0; s < sectors; s++) {
-        uint8_t status;
-        do {
-            status = inb(0x1F7);
-            if (status & 0x01) {
-                return;
-            }
-        } while (!(status & 0x08));
-        for (int w = 0; w < 256; w++) {
-            buffer[w+abswords] = inw(0x1F0);
-        }
-        abswords += 256;
-    }
-}
-uint16_t buffersec[256];
-uint8_t* buffersecpb = (uint8_t*)buffersec;
-// ATUFS things
-typedef struct {
-    uint8_t name[16];
-    uint8_t ext[3];
-    uint16_t cluster;
-    uint32_t size;
-} file_entry;
-
-
 extern char bss_start;
 extern char bss_end;
-// void clear_bss() {
-//     uint8_t *p = (uint8_t*)&bss_start;
-//     uint8_t *end = (uint8_t*)&bss_end;
-//     while (p < end) {
-//         *p++ = 0;
-//     }
-// }
 void clear_bss() {
     uint8_t *p = (uint8_t*)&bss_start;
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < bss_end; i++) {
         p[i] = 0;
     }
 }
-
+uint8_t file_buffer[512];
 void kernel() {
     config_gdt();
     remap_pic(0x20, 0x28);
     config_idt();
     clear();
     set_cursor_pos(0);
+    print("Um oi do kernel :D", 0x07);
     while (true) {
         out_key key = waitget_key();
         if (key.asciicode) {

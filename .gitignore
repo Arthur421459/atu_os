@@ -1,4 +1,4 @@
 build/
 compile_commands.json
 kernel.bin
-resumobaremetalc.txt
+# hd.img

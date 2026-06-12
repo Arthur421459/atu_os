@@ -28,7 +28,10 @@ _start:
     mov esp, stack_top
     call clear_bss
     call kernel
-    .lp: jmp .lp
+    .hlt: 
+        hlt
+        jmp .hlt
+
 set_gdt:
     mov eax, [esp+4]
     lgdt [eax] ; OMG gdt loaded lol
