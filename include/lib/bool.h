@@ -1,7 +1,10 @@
 #ifndef DEFS_H
 #define DEFS_H
 #include <stdint.h>
-typedef uint8_t bool;
+typedef enum {
+    false = 0,
+    true = 1
+} bool;
 #define false 0
 #define true 1
 

@@ -11,8 +11,9 @@ C_BOOT_SRC = $(wildcard src/boot/*.c)
 ASM_BOOT_SRC = $(wildcard src/boot/*.asm)
 
 C_DRIVER_SRC = $(wildcard src/drivers/*.c)
+C_LIB_SRC  = $(wildcard src/lib/*.c)
 
-SRC_C = $(C_DRIVER_SRC)
+SRC_C = $(C_DRIVER_SRC) $(C_LIB_SRC)
 #SRC_ASM
 
 OBJ_C = $(patsubst src/%.c, $(BUILD_DIR)/c/%.o, $(SRC_C))
@@ -56,4 +57,4 @@ gdb: all
 	gdb -ex 'target remote localhost:1234' ./kernel.bin
 clean:
 	rm -rf $(BUILD_DIR) kernel.bin
-.PHONY: all run clean
+.PHONY: all run gdb clean

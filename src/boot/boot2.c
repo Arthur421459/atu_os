@@ -2,6 +2,9 @@
 #include "lib/io.h"
 #include "lib/string.h"
 #include "drivers/ata.h"
+#include "lib/atufs.h"
+#include "lib/elf.h"
+#include "lib/mem.h"
 struct vbe_mode_info_structure {
 	uint16_t attributes;		// deprecated, only bit 7 should be of interest to you, and it indicates the mode supports a linear frame buffer.
 	uint8_t window_a;			// deprecated
@@ -39,53 +42,10 @@ struct vbe_mode_info_structure {
 	uint16_t off_screen_mem_size;	// size of memory in the framebuffer but not being displayed on the screen
 	uint8_t reserved1[206];
 } __attribute__ ((packed));
-struct atufs_info {
-    uint16_t jmpormagic;
-    uint16_t magic;
-    uint8_t ver;
-    uint16_t block_size;
-    uint16_t file_size;
-    uint16_t boot2_size;
-    uint8_t skipped_blocks;
-    uint32_t files;
-    uint32_t clusters;
-    uint32_t alocated_files;
-    uint32_t alocated_clusters;
-    uint16_t journal_size;
-    uint32_t startbmpfile;
-    uint32_t startbmpcluster;
-    uint32_t file0;
-    uint32_t cluster0;
-    uint8_t label[8];
-    uint8_t zero[460];
-} __attribute__((packed));
-struct extent {
-    uint32_t startcluster;
-    uint32_t manyclusters;
-};
-struct file {
-    uint32_t size_low;
-    uint16_t size_high;
-    uint32_t last_mod;
-    uint32_t last_access;
-    uint32_t creation;
-    uint16_t user_id;
-    uint8_t attributes;
-    uint8_t future;
-    union {
-        uint8_t data[490];
-        struct extent extents[61];
-    } __attribute__((packed));
-} __attribute__((packed));
-struct entry {
-    uint32_t file;
-    uint16_t entry_size;
-    uint8_t atr;
-    uint8_t namesize;
-    uint8_t name[];
-};
+
 volatile char* tvideo = (volatile char*) 0xB8000;
-uint8_t* kernel_addr = (uint8_t*)0x100000;
+uint8_t* kernel_buffer = (uint8_t*)0x200000;
+
 int cursor = 0;
 int cursorc = 0;
 void set_cursor_pos(uint16_t pos) {
@@ -129,8 +89,6 @@ void clear() {
 }
 
 
-
-struct atufs_info atufsinfo;
 struct vbe_mode_info_structure vbe_info;
 volatile uint32_t* graphic;
 uint8_t drive = 0;
@@ -139,39 +97,15 @@ struct file filebuffer1;
 struct file filebuffer2;
 uint8_t readbuffer1[128];
 uint8_t readbuffer2[64];
-uint64_t read_filedata(struct file* file1, uint8_t* buffer) {
-    if (file1->attributes & 0b10000000) {
-        uint64_t size;
-        size = ((uint64_t) file1->size_high << 32) | file1->size_low;
-        return size;
-    } else {
-        for (uint32_t i = 0; i < file1->size_low;i++) {
-            buffer[i] = file1->data[i];
-        }
-        return (uint64_t)file1->size_low;
-    }
-    return 0;
-}
-void find_file(const char* name, uint8_t* buffer, uint64_t buffer_size, struct file* f) {
-    uint64_t offset = 0;
-    while (offset < buffer_size) {
-        struct entry* fentry = (struct entry*)(buffer+offset);
-        if (cmpstr_limit((char*)fentry->name, name, fentry->namesize)) {
-            read_sector(atufsinfo.file0+(fentry->file), (uint16_t*)f, 1);
-            return;
-        }
-        offset += fentry->entry_size;
-    };
-}
-void boot2main() {
+
+
+uintptr_t boot2main() {
     //graphic = (volatile uint32_t*) vbe_info.framebuffer;
     clear();
-    read_sector(0, (uint16_t*)&atufsinfo, 1); // update atufsinfo
     read_sector(atufsinfo.file0, (uint16_t*)&filebuffer1, 1); // read file
     uint64_t rootsize = read_filedata(&filebuffer1, readbuffer1);
-    find_file("teste.txt", readbuffer1, rootsize, &filebuffer2);
-    uint64_t filesize = read_filedata(&filebuffer2, readbuffer2);
-    for (uint64_t i = 0; i < filesize;i++) {
-        printchar(readbuffer2[i], 0x07);
-    }
+    find_file("kernel.elf", readbuffer1, rootsize, &filebuffer2);
+    read_filedata(&filebuffer2, kernel_buffer);
+    uintptr_t kernel_offset = load_elf(kernel_buffer);
+    return kernel_offset;
 }
