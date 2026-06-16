@@ -2,7 +2,6 @@
 #include "lib/elf.h"
 #include "lib/bool.h"
 #include "lib/string.h"
-#include "lib/mem.h"
 bool is_elf(uint8_t* buffer) {
     struct elf_header* elfh = (struct elf_header*)buffer;
     if (elfh->magic != 0x7F) {return false;} // check magic code

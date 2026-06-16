@@ -27,7 +27,7 @@ def write_superblock():
     buffer.write(struct.pack("<H", 0xF5A7)) # magic code
     buffer.write(struct.pack("<B", 0))
     buffer.write(struct.pack("<H", block)) # block size
-    buffer.write(struct.pack("<H", 0x200)) # file size
+    buffer.write(struct.pack("<H", 512)) # file size
     buffer.write(struct.pack("<H", 10)) # boot2 size in blocks
     buffer.write(struct.pack("<B", 4)) # skipped blocks
     buffer.write(struct.pack("<I", totalfiles))
@@ -72,19 +72,13 @@ with open(args.file, "r+b") as disk:
     write_superblock()
     buffer.seek(1024)
     buffer.seek(startbmpfile*512)
-    buffer.write(struct.pack("<B", 3)) # reservar o primeiro file para o root e um arquivo extra
-
-    # reservar os clusters do kernel
-    buffer.seek(startbmpcluster*512)
-    buffer.write(struct.pack("<B", 0xFF)) # 8
-    buffer.write(struct.pack("<B", 0xFF)) # 8
-    buffer.write(struct.pack("<B", 0xFF)) # 8
-    buffer.write(struct.pack("<B", 0b00011111)) # 5
+    buffer.write(struct.pack("<B", 7)) # reservar o primeiro file para o root, kernel e teste.txt
 
     buffer.seek(file0*512)
-    buffer.write(struct.pack("<I", 18)) # size low
+
     dt_atual_utc = datetime.now(timezone.utc)
     unix_time = int(dt_atual_utc.timestamp())
+    buffer.write(struct.pack("<I", 35)) # size low
     buffer.write(struct.pack("<H", 0)) # size high
     buffer.write(struct.pack("<I", unix_time)) # last mod in unix
     buffer.write(struct.pack("<I", unix_time)) # last access
@@ -92,14 +86,26 @@ with open(args.file, "r+b") as disk:
     buffer.write(struct.pack("<H", 0)) # userid (0 for kernel)
     buffer.write(struct.pack("<B", 0b00000001)) # atributes
     buffer.write(struct.pack("<B", 0)) # reserved byte
-    # arquivo extra
+    # kernel
     buffer.write(struct.pack("<I", 1)) # file apontado
     buffer.write(struct.pack("<H", 18)) # tamanho da entry
     buffer.write(struct.pack("<B", 0x20)) # tipo
     buffer.write(struct.pack("<B", 10)) # tamanho do nome
     buffer.write(b'kernel.elf') # nome
+
+    # teste.txt
+    buffer.write(struct.pack("<I", 2))
+    buffer.write(struct.pack("<H", 17))
+    buffer.write(struct.pack("<B", 0x20))
+    buffer.write(struct.pack("<B", 9))
+    buffer.write(b'teste.txt')
+
+    # file 1
     buffer.seek((file0+1)*512)
-    buffer.write(struct.pack("<I", 14708)) # size low
+    kernelp = Path(args.kernel)
+    kernelsize = kernelp.stat().st_size
+    kernelsizeinclus = math.ceil(kernelsize / 512)
+    buffer.write(struct.pack("<I", kernelsize)) # size low
     dt_atual_utc = datetime.now(timezone.utc)
     unix_time = int(dt_atual_utc.timestamp())
     buffer.write(struct.pack("<H", 0)) # size high
@@ -110,9 +116,26 @@ with open(args.file, "r+b") as disk:
     buffer.write(struct.pack("<B", 0b10000000)) # atributes
     buffer.write(struct.pack("<B", 0)) # reserved byte
     buffer.write(struct.pack("<I", 0)) # first cluster
-    buffer.write(struct.pack("<I", 29)) # extent to cluster 28
+    buffer.write(struct.pack("<I", kernelsizeinclus))
+    # file 2
+    buffer.seek((file0+2)*512)
+    buffer.write(struct.pack("<I", 171))
+    buffer.write(struct.pack("<H", 0))
+    buffer.write(struct.pack("<I", unix_time)) # last mod in unix
+    buffer.write(struct.pack("<I", unix_time)) # last access
+    buffer.write(struct.pack("<I", unix_time)) # creation
+    buffer.write(struct.pack("<H", 0)) # userid (0 for kernel)
+    buffer.write(struct.pack("<B", 0b00000000)) # atributes
+    buffer.write(struct.pack("<B", 0)) # reserved byte
+    buffer.write(b'Paging is a system which allows each process to see a full virtual address space, without actually requiring the full amount of physical memory to be available or present.')
     buffer.seek(cluster0*512)
     with open(args.kernel, "rb") as kernel:
         buffer.write(kernel.read())
+    # reservar os clusters do kernel
+    buffer.seek(startbmpcluster*512)
+    for i in range(kernelsizeinclus // 8):
+        buffer.write(struct.pack("<B", 0xFF))
+    if kernelsizeinclus % 8 > 0:
+        buffer.write(struct.pack("<B", 2**(kernelsizeinclus % 8) - 1))
     disk.write(buffer.getvalue())
 

@@ -1,6 +1,6 @@
 BUILD_DIR = build
 CC = gcc
-CC_FLAGS = -m32 -std=gnu99 -ffreestanding -ffunction-sections -fdata-sections -O2 -Wall -mno-sse -mno-sse2 -mno-mmx -Wextra -Iinclude -fno-stack-protector -fno-pic -fno-pie -fno-builtin
+CC_FLAGS = -m32 -std=gnu99 -ffreestanding -ffunction-sections -fdata-sections -O0 -Wall -mno-sse -mno-sse2 -mno-mmx -Wextra -Iinclude -fno-stack-protector -fno-pic -fno-pie -fno-builtin -g
 ASMC = nasm
 ASMC_FLAGS = -f elf32
 LD_FLAGS = -m elf_i386 --gc-sections
@@ -25,7 +25,10 @@ OBJ_KERNEL_ASM = $(patsubst src/%.asm, $(BUILD_DIR)/asm/%.o, $(ASM_KERNEL_SRC))
 OBJ_BOOT_C = $(patsubst src/%.c, $(BUILD_DIR)/c/%.o, $(C_BOOT_SRC))
 OBJ_BOOT_ASM = $(patsubst src/%.asm, $(BUILD_DIR)/asm/%.o, $(ASM_BOOT_SRC))
 
-all: kernel.bin $(BUILD_DIR)/boot2.bin hd.img
+all: hd.img
+
+hd.img: kernel.bin $(BUILD_DIR)/boot2.bin src/python/mkatufs.py src/python/add.py
+	dd if=/dev/zero of=hd.img bs=1M count=64
 	python src/python/mkatufs.py hd.img kernel.bin
 	python src/python/add.py hd.img $(BUILD_DIR)
 
@@ -36,8 +39,8 @@ $(BUILD_DIR)/boot2.bin: $(OBJ_C) $(OBJ_BOOT_C) $(OBJ_BOOT_ASM) linker/boot2.ld
 	ld $(LD_FLAGS) -T linker/boot2.ld $(OBJ_C) $(OBJ_BOOT_C) $(OBJ_BOOT_ASM) -o $(BUILD_DIR)/boot2.elf
 	objcopy -O binary $(BUILD_DIR)/boot2.elf $(BUILD_DIR)/boot2.bin
 	
-hd.img:
-	dd if=/dev/zero of=hd.img bs=1M count=64
+	
+
 
 $(BUILD_DIR)/c/%.o: src/%.c
 	@mkdir -p $(dir $@)
@@ -51,10 +54,11 @@ mkatufs: hd.img
 	python src/python/mkatufs.py hd.img
 run: all
 	qemu-system-i386 -drive file=hd.img,format=raw,index=0,media=disk
+
 gdb: all
 	qemu-system-i386 -drive file=hd.img,format=raw,index=0,media=disk -s -S &
 	sleep 0.2
 	gdb -ex 'target remote localhost:1234' ./kernel.bin
 clean:
-	rm -rf $(BUILD_DIR) kernel.bin
+	rm -rf $(BUILD_DIR) kernel.bin hd.img
 .PHONY: all run gdb clean

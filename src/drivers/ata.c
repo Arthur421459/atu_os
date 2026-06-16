@@ -11,18 +11,41 @@ void read_sector(uint32_t lba, uint16_t* buffer, uint8_t sectors) {
     outb(0x1F6, 0b11100000 | ((lba >> 24) & 0x0F)); // head/drive & lba end
 
     outb(0x1F7, 0x20); // READDDDDDDD
-    uint32_t abswords = 0;
     for (int s = 0; s < sectors; s++) {
         uint8_t status;
         do {
             status = inb(0x1F7);
-            if (status & 0x01) {
+            if (status & 1) {
                 return;
             }
-        } while (!(status & 0x08));
-        for (int w = 0; w < 256; w++) {
-            buffer[w+abswords] = inw(0x1F0);
+        } while (!(status & 8));
+        for (int j = 0; j < 256; j++) {
+            *buffer++ = inw(0x1F0);
         }
-        abswords += 256;
+    }
+}
+void write_sector(uint32_t lba, uint16_t *buffer, uint8_t sectors) {
+    while ((inb(0x1F7) & 0x80)); // wait ata
+    outb(0x1F2, sectors); // sectors quan
+
+    // lba
+    outb(0x1F3, lba & 0xFF); // low
+    outb(0x1F4, (lba >> 8) & 0xFF); // medium
+    outb(0x1F5, (lba >> 16) & 0xFF); // high
+    // lba end
+    
+    outb(0x1F6, 0b11100000 | ((lba >> 24) & 0x0F));
+    outb(0x1F7, 0x30); // WRITEEEEEEE
+
+    for (uint8_t i = 0; i < sectors; i++) {
+        uint8_t status;
+        do {
+            status = inb(0x1F7);
+            if (status & 1) {return;}
+        } while (!(status & 8));
+        
+        for (uint16_t j = 0; j < 256;j++) {
+            outb(0x1F0, *buffer++);
+        }
     }
 }

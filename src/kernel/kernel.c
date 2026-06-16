@@ -1,6 +1,10 @@
+#include "drivers/ata.h"
 #include "lib/bool.h"
 #include "lib/io.h"
 #include "drivers/keyboard.h"
+#include "lib/atufs.h"
+#include "lib/string.h"
+#include "drivers/cmos.h"
 #include <stdint.h>
 volatile char* tvideo = (volatile char*) 0xB8000;
 int cursor = 0;
@@ -11,6 +15,7 @@ extern void set_gdt(uint32_t gp_ptr);
 extern void int0();
 extern void irq0();
 extern void irq1();
+extern void irq12();
 extern void irqmaslabel();
 extern void irqslavelabel();
 extern void intlabel();
@@ -24,39 +29,41 @@ void set_cursor_pos(uint16_t pos) {
     outb(0x3d5, (uint8_t) pos & 0xff); // change reg
     outb(0x3d4, 0x0e);
     outb(0x3d5, (uint8_t) ((pos >> 8) & 0xFF));
-    cursorc = pos;
-    cursor = pos * 2;
 }
 int set_cursor_pos_xy(int x, int y) {
     int abspos = y * 80 + x;
     set_cursor_pos(abspos);
     return abspos;
 }
-
-void printchar(char c, int color) {
-    if (cursor >= 4000) {
-        cursor = 0;
+void printchar_wpos(char c, int color, int pos) {
+    if (pos >= 4000) {
+        return;
     }
-    tvideo[cursor++] = c;
-    tvideo[cursor++] = color;
-    cursorc++;
+    pos *= 2;
+    tvideo[pos++] = c;
+    tvideo[pos++] = color;
 }
-void print(const char* str, int color) {
+void printchar_wposxy(char c, int color, int x, int y) {
+    printchar_wpos(c, color, (80*y)+x);
+}
+
+void print_wpos(const char* str, int color, int pos) {
     while (*str) {
-        
-        printchar(*str++, color);
+        printchar_wpos(*str++, color, pos++);
     }
-    set_cursor_pos(cursorc);
+}
+void print_wposxy(const char* str, int color, int x, int y) {
+    print_wpos(str, color, (80*y)+x);
 }
 
 void clear() {
-    cursor = 0;
-    while (cursor < 4000) {
-        tvideo[cursor++] = 0;
-        tvideo[cursor++] = 0x07;
+    for (short i = 0; i < 4000;i++) {
+        if (i % 2) {
+            tvideo[i] = 0x07;
+        } else {
+            tvideo[i] = 0;
+        }
     }
-    cursor = 0;
-    cursorc = 0;
 }
 
 // gdt
@@ -129,18 +136,31 @@ struct idt_ptr itr;
 void int_handler(uint32_t num) {
     switch (num) {
         case 0:
-            print("Voce ja estudou matematica na escola?", 0x07);
+            print_wpos("Voce ja estudou matematica na escola?", 0x07, 0);
             break;
     }
 }
+int a = 0;
+int tick = 0;
+uint32_t systime = 0;
+nixt worldtime = 0;
 void irq_handler(uint32_t irqx) {
     switch (irqx) {
         case 0:
+            tick++;
+            if (tick >= 100) {
+                systime++;
+                worldtime++;
+                tick = 0;
+            }
             break;
         case 1:
             irq1code();
             break;
+        case 12:
+            break;
     }
+    
     if (irqx >= 8) {
         outb(SlavePIC_code, 0x20);
     }
@@ -176,7 +196,7 @@ void set_interrupt_idt(int i,uint32_t offset, uint8_t attributes, uint16_t selec
     idt[i].selector = selector;
 
     idt[i].reserved_zero = 0; // nunca se sabe ne?
-} 
+}
 void config_idt() {
     itr.base = (uintptr_t)&idt;
     itr.limit = sizeof(idt) - 1;
@@ -191,6 +211,9 @@ void config_idt() {
             case 33:
                 set_interrupt_idt(i, (uintptr_t)&irq1, 0x8E, 0x08);
                 break;
+            case 44:
+                set_interrupt_idt(i, (uintptr_t)&irq12, 0x8E, 0x08);
+                break;
             default:
                 if (i >= 0x20 && i < 0x28) {
                     set_interrupt_idt(i, (uintptr_t)&irqmaslabel, 0x8E, 0x08);
@@ -204,7 +227,6 @@ void config_idt() {
     }
     
     set_idt((uintptr_t)&itr);
-
 }
 
 extern char bss_start;
@@ -215,31 +237,103 @@ void clear_bss() {
         p[i] = 0;
     }
 }
-uint8_t file_buffer[512];
+
+void sleep(uint32_t sec) {
+    uint32_t target = systime + sec;
+    while (systime < target) {
+        asm volatile ("hlt");
+    }
+}
+
+struct file filebuffer1;
+struct file filebuffer2;
+
+uint16_t buffer1[256];
+uint16_t buffer2[256];
+uint16_t buffer3[256];
+
+uint16_t start_pos;
+
+uint8_t cmd_size;
+char cmd_buffer[128];
+uint8_t cmd_pos;
+
+uint64_t rootsize = 45;
+char numbuffer[5];
+void cmd_end() {
+    uint16_t nextpos = start_pos+cmd_size - ((start_pos+cmd_size) % 80) + 80;
+    if (cmpstr("echo ", cmd_buffer)) {
+        print_wposxy(cmd_buffer+5, 0x07, 0, (start_pos+cmd_size)/80 + 1);
+        nextpos += 160;
+    } else if (cmpstr("cat ", cmd_buffer)) {
+        find_file(cmd_buffer+4, (uint8_t*)buffer1, 45, &filebuffer2);
+        uint64_t size = read_filedata(&filebuffer2, (uint8_t*)buffer2);
+        print_wposxy((char*)buffer2, 0x07, 0, start_pos/80 + 1);
+        nextpos += 80 + 80*(((uint32_t)size + 79) / 80);
+    } else if (cmpstr("time", cmd_buffer)) {
+        print_wposxy("tempo ", 0x07, 0, start_pos/80 + 1);
+        num_to_str(worldtime, numbuffer);
+        print_wposxy(numbuffer, 0x07, 6, start_pos/80 + 1);
+        nextpos += 80;
+    }
+    // final
+
+    print_wpos("atuos>", 0x07, nextpos);
+    set_cursor_pos(nextpos + 7);
+    memset(cmd_buffer, 0, 128);
+    start_pos = nextpos+7;
+    cmd_size = 0;
+    cmd_pos = 0;
+
+}
+#define initialpic_freq 1193182
+void set_pit_freq(uint32_t freq) {
+    uint16_t div = initialpic_freq / freq;
+    outb(0x43, 0b00110111); // set command (channel 0, square wave)
+
+    outb(0x40, div & 0xFF); // low
+    outb(0x40, div >> 8); // high
+}
+
 void kernel() {
     config_gdt();
     remap_pic(0x20, 0x28);
+    set_pit_freq(100);
     config_idt();
+    worldtime = convert_to_nixt(get_cmos_time());
+    worldtime -= 10800; // sincronizar fuso horário
+    init_atufs();
     clear();
-    set_cursor_pos(0);
-    print("Um oi do kernel :D", 0x07);
+
+    print_wposxy("Bem vindo ao AtuOS! :D", 0x07, 0, 1);
+    set_cursor_pos_xy(7, 3);
+    print_wposxy("atuos>", 0x07, 0, 3);
+    start_pos = 247;
+    read_sector(atufsinfo.file0, (uint16_t*)&filebuffer1, 1);
+    rootsize = read_filedata(&filebuffer1, (uint8_t*)buffer1);
+    // start cmd
     while (true) {
         out_key key = waitget_key();
-        if (key.asciicode) {
-            if (key.asciicode == '\n') {
-                set_cursor_pos_xy(0, (cursorc / 80) + 1);
-            } else if (key.asciicode == '\b') {
-                if (cursor >= 2) {
-                    cursor -= 2;
-                    tvideo[cursor] = ' ';
-                    tvideo[cursor + 1] = 0x07;
-                    cursorc--;
-                    set_cursor_pos(cursorc);
-                }   
-            } else {
-                printchar(key.asciicode, 0x07);
-                set_cursor_pos(cursorc);
-            }
+        switch (key.asciicode) {
+            case '\b':
+                if (cmd_pos < 1) {break;}
+                cmd_pos--;
+                cmd_size--;
+                printchar_wpos(' ', 0x07, start_pos+cmd_pos);
+                cmd_buffer[cmd_pos] = ' ';
+                set_cursor_pos(start_pos+cmd_pos);
+                break;
+            case '\n':
+                cmd_end();
+                break;
+            case 0:
+                break;
+            default:
+                if (cmd_pos >= 128) {break;}
+                printchar_wpos(key.asciicode, 0x07, start_pos+cmd_pos);
+                cmd_buffer[cmd_pos++] = key.asciicode;
+                cmd_size++;
+                set_cursor_pos(start_pos+cmd_pos);
         }
     }
 }

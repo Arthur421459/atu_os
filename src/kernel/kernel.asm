@@ -17,6 +17,7 @@ extern stack_top
 global int0
 global irq0
 global irq1
+global irq12
 global irqmaslabel
 global irqslavelabel
 global set_idt
@@ -62,7 +63,9 @@ int0:
 irq1:
     push dword 1
     jmp irq_common
-
+irq12:
+    push dword 12
+    jmp irq_common
 irq0:
     push dword 0
     jmp irq_common

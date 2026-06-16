@@ -19,12 +19,12 @@ struct atufs_info {
     uint32_t file0;
     uint32_t cluster0;
     uint8_t label[8];
-    uint8_t zero[460];
+    uint8_t zero[458];
 } __attribute__((packed));
 struct extent {
     uint32_t startcluster;
     uint32_t manyclusters;
-};
+} __attribute__((packed));;
 struct file {
     uint32_t size_low;
     uint16_t size_high;
@@ -45,10 +45,11 @@ struct entry {
     uint8_t atr;
     uint8_t namesize;
     uint8_t name[];
-};
+} __attribute__((packed));
 extern struct atufs_info atufsinfo;
 extern uint16_t blockinsec;
+
 uint64_t read_filedata(struct file* file1, uint8_t* buffer);
 void find_file(const char* name, uint8_t* buffer, uint64_t buffer_size, struct file* f);
-
+void init_atufs();
 #endif

@@ -1,10 +1,8 @@
 #include <stdint.h>
 #include "lib/io.h"
-#include "lib/string.h"
 #include "drivers/ata.h"
 #include "lib/atufs.h"
 #include "lib/elf.h"
-#include "lib/mem.h"
 struct vbe_mode_info_structure {
 	uint16_t attributes;		// deprecated, only bit 7 should be of interest to you, and it indicates the mode supports a linear frame buffer.
 	uint8_t window_a;			// deprecated
@@ -44,7 +42,7 @@ struct vbe_mode_info_structure {
 } __attribute__ ((packed));
 
 volatile char* tvideo = (volatile char*) 0xB8000;
-uint8_t* kernel_buffer = (uint8_t*)0x200000;
+uint8_t* kernel_buffer = (uint8_t*)0x500000;
 
 int cursor = 0;
 int cursorc = 0;
@@ -98,14 +96,14 @@ struct file filebuffer2;
 uint8_t readbuffer1[128];
 uint8_t readbuffer2[64];
 
-
 uintptr_t boot2main() {
     //graphic = (volatile uint32_t*) vbe_info.framebuffer;
-    clear();
+    init_atufs();
     read_sector(atufsinfo.file0, (uint16_t*)&filebuffer1, 1); // read file
     uint64_t rootsize = read_filedata(&filebuffer1, readbuffer1);
     find_file("kernel.elf", readbuffer1, rootsize, &filebuffer2);
     read_filedata(&filebuffer2, kernel_buffer);
     uintptr_t kernel_offset = load_elf(kernel_buffer);
+
     return kernel_offset;
 }

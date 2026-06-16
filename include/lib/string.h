@@ -31,4 +31,39 @@ static inline char captalize_letter(unsigned char letter) {
         return letter;
     }
 }
+static inline void memcpy(void *restrict dest, const void *restrict src, uintptr_t n) {
+    char *d = (char *)dest;
+    const char *s = (const char *)src;
+    for (uintptr_t i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+}
+static inline void memset(void *s, int c, uintptr_t n) {
+    char *p = (char*)s;
+    for (uintptr_t i = 0;i < n;i++) {
+        p[i] = (unsigned char)c;
+    }
+}
+static inline void num_to_str(uintptr_t num, char* str) {
+    int i = 0;
+    if (num == 0) {
+        str[i++] = '0';
+        str[i] = '\0';
+        return;
+    }
+
+    while (num != 0) {
+        char resultado = num % 10;
+        resultado += '0';
+        str[i++] = resultado;
+        num /= 10;
+    }
+
+    str[i] = '\0';
+    for (int start = 0, end = i - 1; start < end; start++, end--) {
+        char temp = str[start];
+        str[start] = str[end];
+        str[end] = temp;
+    }
+}
 #endif
