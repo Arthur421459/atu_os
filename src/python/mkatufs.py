@@ -32,8 +32,8 @@ def write_superblock():
     buffer.write(struct.pack("<B", 4)) # skipped blocks
     buffer.write(struct.pack("<I", totalfiles))
     buffer.write(struct.pack("<I", totalclusters))
-    buffer.write(struct.pack("<I", 0)) # alocated files
-    buffer.write(struct.pack("<I", 0)) # alocated clusters
+    buffer.write(struct.pack("<I", 3)) # alocated files
+    buffer.write(struct.pack("<I", 40)) # alocated clusters
     buffer.write(struct.pack("<H", journalsize)) # size journal in blocks
     buffer.write(struct.pack("<I", startbmpfile))
     buffer.write(struct.pack("<I", startbmpcluster))

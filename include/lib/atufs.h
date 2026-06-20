@@ -24,7 +24,8 @@ struct atufs_info {
 struct extent {
     uint32_t startcluster;
     uint32_t manyclusters;
-} __attribute__((packed));;
+} __attribute__((packed));
+
 struct file {
     uint32_t size_low;
     uint16_t size_high;
@@ -50,6 +51,7 @@ extern struct atufs_info atufsinfo;
 extern uint16_t blockinsec;
 
 uint64_t read_filedata(struct file* file1, uint8_t* buffer);
-void find_file(const char* name, uint8_t* buffer, uint64_t buffer_size, struct file* f);
+uintptr_t find_file(const char* name, uint8_t* buffer, uint64_t buffer_size, struct file* f);
 void init_atufs();
+void write_file(struct file* f, uint32_t filenum, uint8_t *buffer, uint64_t buffer_size);
 #endif

@@ -11,7 +11,11 @@ void read_sector(uint32_t lba, uint16_t* buffer, uint8_t sectors) {
     outb(0x1F6, 0b11100000 | ((lba >> 24) & 0x0F)); // head/drive & lba end
 
     outb(0x1F7, 0x20); // READDDDDDDD
-    for (int s = 0; s < sectors; s++) {
+    uint16_t sc = sectors;
+    if (sc == 0) {
+        sc = 256;
+    }
+    for (int s = 0; s < sc; s++) {
         uint8_t status;
         do {
             status = inb(0x1F7);
@@ -45,7 +49,33 @@ void write_sector(uint32_t lba, uint16_t *buffer, uint8_t sectors) {
         } while (!(status & 8));
         
         for (uint16_t j = 0; j < 256;j++) {
-            outb(0x1F0, *buffer++);
+            outw(0x1F0, *buffer++);
         }
+    }
+    outb(0x1F7, 0xE7);
+    while ((inb(0x1F7) & 0x80));
+}
+void lread_sector(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
+    for (uint32_t i = 0; i < (sectors / 256);i++) {
+        read_sector(lba, buffer, 0);
+        buffer += 65536; // 256^2
+        lba += 256;
+    }
+    if (sectors % 256) {
+        read_sector(lba, buffer, sectors % 256);
+        lba += sectors % 256;
+        buffer += (sectors % 256)*256;
+    }
+}
+void lwrite_sector(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
+    for (uint32_t i = 0; i < (sectors / 256);i++) {
+        write_sector(lba, buffer, 0);
+        buffer += 65536; // 256 * words per sector
+        lba += 256;
+    }
+    if (sectors % 256) {
+        write_sector(lba, buffer, sectors % 256);
+        lba += sectors % 256;
+        buffer += (sectors % 256)*256;
     }
 }

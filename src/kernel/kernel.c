@@ -249,7 +249,7 @@ struct file filebuffer1;
 struct file filebuffer2;
 
 uint16_t buffer1[256];
-uint16_t buffer2[256];
+uint16_t buffer2[1024];
 uint16_t buffer3[256];
 
 uint16_t start_pos;
@@ -260,6 +260,9 @@ uint8_t cmd_pos;
 
 uint64_t rootsize = 45;
 char numbuffer[5];
+
+char teste[] = "In computing, a file system or filesystem (often abbreviated to FS or fs) governs file organization and access. A local file system is a capability of an operating system that services the applications running on the same computer.[1][2] A distributed file system is a protocol that provides file access between networked computers. A file system provides a data storage service that allows applications to share mass storage. Without a file system, applications could access the storage in incompatible ways that lead to resource contention, data corruption, and data loss. There are many file system designs and implementations – with various structures and features and various resulting characteristics such as speed, flexibility, security, size, and more. File systems have been developed for many types of storage devices, including hard disk drives (HDDs), solid-state drives (SSDs), magnetic tapes and optical discs.[3] A portion of the computer main memory can be set up as a RAM disk that serves as a storage device for a file system. File systems such as tmpfs can store files in virtual memory. A virtual file system provides access to files that are either computed on request, called virtual files (for example those provided by procfs and sysfs), or are mapping into another, backing storage. \0\0\0";
+
 void cmd_end() {
     uint16_t nextpos = start_pos+cmd_size - ((start_pos+cmd_size) % 80) + 80;
     if (cmpstr("echo ", cmd_buffer)) {
@@ -268,13 +271,19 @@ void cmd_end() {
     } else if (cmpstr("cat ", cmd_buffer)) {
         find_file(cmd_buffer+4, (uint8_t*)buffer1, 45, &filebuffer2);
         uint64_t size = read_filedata(&filebuffer2, (uint8_t*)buffer2);
+        buffer2[size] = '\0';
         print_wposxy((char*)buffer2, 0x07, 0, start_pos/80 + 1);
         nextpos += 80 + 80*(((uint32_t)size + 79) / 80);
     } else if (cmpstr("time", cmd_buffer)) {
-        print_wposxy("tempo ", 0x07, 0, start_pos/80 + 1);
+        print_wposxy("Unix Time: ", 0x07, 0, start_pos/80 + 1);
         num_to_str(worldtime, numbuffer);
-        print_wposxy(numbuffer, 0x07, 6, start_pos/80 + 1);
+        print_wposxy(numbuffer, 0x07, 11, start_pos/80 + 1);
         nextpos += 80;
+    } else if (cmpstr("edit ", cmd_buffer)) {
+        uint32_t file = find_file(cmd_buffer+5, (uint8_t*)buffer1, 45, &filebuffer2);
+        if (file) {
+            write_file(&filebuffer2, file, (uint8_t*)teste, 1310);
+        }
     }
     // final
 
