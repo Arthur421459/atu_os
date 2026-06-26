@@ -2,19 +2,22 @@
 extern drive
 extern boot2main
 extern vbe_info
+extern partaddr
+extern partstart
 global _start
 _start:
     xor ax, ax
     mov ds, ax
     mov es, ax
+    mov [partaddr], esi ; salvar o ponteiro
     mov [drive], dl ; salvar o drive
-    ; mov ax, 0x4f02
-    ; mov bx, 324
-    ; int 10h
-    ; mov ax, 0x4f01
-    ; mov cx, 324
-    ; mov di, vbe_info
-    ; int 10h
+    mov ax, 0x4f02
+    mov bx, 324
+    int 10h
+    mov ax, 0x4f01
+    mov cx, 324
+    mov di, vbe_info
+    int 10h
     cli ; adeus interrupções.....
     in al, 0x92
     test al, 2 ; ver se a20 já foi ativado
@@ -60,6 +63,8 @@ start32:
     mov ss, ax
     mov esp, 0x90000
     call boot2main
+    mov ebx, vbe_info
+    mov esi, [partaddr]
     jmp eax
     hlt
 

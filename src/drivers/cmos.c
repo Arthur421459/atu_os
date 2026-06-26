@@ -72,6 +72,7 @@ struct timestruct get_cmos_time() {
     asm volatile ("sti"); // other things can be interrupted >:D
     return time;
 }
+
 nixt convert_to_nixt(struct timestruct time) {
     nixt nixtime = time.sec; // set seconds
     nixtime += 60*time.min; // set minutes
@@ -86,47 +87,22 @@ nixt convert_to_nixt(struct timestruct time) {
 
     nixtime += hour * 3600;
 
-    nixtime += 86400*(time.day-1); // set day of the month
+    uint32_t absdays = time.day - 1;
 
-    // set month start
-    for (int month = 1; month < time.month;month++) {
-        switch (month) {
-            case 1:
-            case 3:
-            case 5:
-            case 7:
-            case 8:
-            case 10:
-            case 12:
-                nixtime += 2678400;
-                break;
-            case 4:
-            case 6:
-            case 9:
-            case 11:
-                nixtime += 2592000;
-            break;
-            case 2:
-                if ((time.year % 4 == 0 && time.year % 100 != 0) || (time.year % 400 == 0)) {
-                    nixtime += 2505600;
-                } else {
-                    nixtime += 2419200;
-                }
-                break;
+    for (int i = 1; i < time.month; i++) {
+        absdays += monthdays[i - 1];
+        if (i == 2) {
+            bool leap = (time.year % 4 == 0 && time.year % 100 != 0) || (time.year % 400 == 0);
+            if (leap) absdays++;
         }
     }
-    // set month end
-
-    // set year start
-    for (int year = 1970; year < time.year;year++) {
-        if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
-            nixtime += 31622400;
-        } else {
-            nixtime += 31536000;
-            
-        }
+    
+    for (int i = 1970; i < time.year;i++) {
+        bool leap = (i % 4 == 0 && i % 100 != 0) || (i % 400 == 0);
+        uint16_t days = leap ? 366 : 365;
+        absdays += days;
     }
-    // set year end
+    nixtime += absdays*86400;
     return nixtime;
 }
 struct timestruct convert_to_timestruct(nixt nixtime, bool pm_enabled) {
@@ -135,13 +111,16 @@ struct timestruct convert_to_timestruct(nixt nixtime, bool pm_enabled) {
     time.sec = nixtime % 60;
     nixtime /= 60;
 
-    time.min = time.sec % 60;
+    time.min = nixtime % 60;
     nixtime /= 60;
 
-    time.hours = time.min % 24;
-    if (pm_enabled && time.hours > 12) {
-        time.hours -= 12;
-        time.is_pm = true;
+    time.hours = nixtime % 24;
+    time.is_pm = false;
+    if (pm_enabled) {
+        if (time.hours >= 12) {
+            time.is_pm = true;
+            if (time.hours > 12) time.hours -= 12;
+        }
     }
     nixtime /= 24;
 

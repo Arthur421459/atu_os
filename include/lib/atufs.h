@@ -1,6 +1,7 @@
 #ifndef ATUFS_H
 #define ATUFS_H
 #include <stdint.h>
+#include "drivers/cmos.h"
 struct atufs_info {
     uint16_t jmpormagic;
     uint16_t magic;
@@ -53,5 +54,9 @@ extern uint16_t blockinsec;
 uint64_t read_filedata(struct file* file1, uint8_t* buffer);
 uintptr_t find_file(const char* name, uint8_t* buffer, uint64_t buffer_size, struct file* f);
 void init_atufs();
-void write_file(struct file* f, uint32_t filenum, uint8_t *buffer, uint64_t buffer_size);
+void write_file(struct file* f, uint32_t filenum, uint8_t *buffer, uint64_t buffer_size, nixt time);
+uint32_t create_file(uint8_t* buffer, uint64_t buffer_size, nixt time, uint16_t userid, uint8_t attr);
+void create_entry(uint32_t file, uint32_t root, uint8_t* name, uint8_t type, uint8_t name_size);
+void delete_file(uint32_t filen);
+void rename_entry(uint32_t root, const char* oldname, const char* newname, uint8_t newnamesize);
 #endif

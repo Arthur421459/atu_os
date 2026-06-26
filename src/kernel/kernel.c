@@ -5,6 +5,7 @@
 #include "lib/atufs.h"
 #include "lib/string.h"
 #include "drivers/cmos.h"
+#include "lib/elf.h"
 #include <stdint.h>
 volatile char* tvideo = (volatile char*) 0xB8000;
 int cursor = 0;
@@ -20,7 +21,7 @@ extern void irqmaslabel();
 extern void irqslavelabel();
 extern void intlabel();
 extern void set_idt(uint32_t itr);
-
+extern void syscallasm();
 
 // funções aleatorias
 
@@ -85,7 +86,6 @@ struct gdt_ptr {
 
 struct gdt_entry gdt[5];
 struct gdt_ptr gp;
-
 
 
 void gdt_set_entry(int seg, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran) {
@@ -214,6 +214,9 @@ void config_idt() {
             case 44:
                 set_interrupt_idt(i, (uintptr_t)&irq12, 0x8E, 0x08);
                 break;
+            case 0xA7:
+                set_interrupt_idt(i, (uintptr_t)&syscallasm, 0x8E, 0x08);
+                break;
             default:
                 if (i >= 0x20 && i < 0x28) {
                     set_interrupt_idt(i, (uintptr_t)&irqmaslabel, 0x8E, 0x08);
@@ -261,7 +264,47 @@ uint8_t cmd_pos;
 uint64_t rootsize = 45;
 char numbuffer[5];
 
-char teste[] = "In computing, a file system or filesystem (often abbreviated to FS or fs) governs file organization and access. A local file system is a capability of an operating system that services the applications running on the same computer.[1][2] A distributed file system is a protocol that provides file access between networked computers. A file system provides a data storage service that allows applications to share mass storage. Without a file system, applications could access the storage in incompatible ways that lead to resource contention, data corruption, and data loss. There are many file system designs and implementations – with various structures and features and various resulting characteristics such as speed, flexibility, security, size, and more. File systems have been developed for many types of storage devices, including hard disk drives (HDDs), solid-state drives (SSDs), magnetic tapes and optical discs.[3] A portion of the computer main memory can be set up as a RAM disk that serves as a storage device for a file system. File systems such as tmpfs can store files in virtual memory. A virtual file system provides access to files that are either computed on request, called virtual files (for example those provided by procfs and sysfs), or are mapping into another, backing storage. \0\0\0";
+char teste[13] = "kasjdkasjkda";
+char oldname[10] = "teste.txt";
+uint8_t* programelf = (uint8_t*)0x300000;
+struct vbe_mode_info_structure {
+	uint16_t attributes;		// deprecated, only bit 7 should be of interest to you, and it indicates the mode supports a linear frame buffer.
+	uint8_t window_a;			// deprecated
+	uint8_t window_b;			// deprecated
+	uint16_t granularity;		// deprecated; used while calculating bank numbers
+	uint16_t window_size;
+	uint16_t segment_a;
+	uint16_t segment_b;
+	uint32_t win_func_ptr;		// deprecated; used to switch banks from protected mode without returning to real mode
+	uint16_t pitch;			// number of bytes per horizontal line
+	uint16_t width;			// width in pixels
+	uint16_t height;			// height in pixels
+	uint8_t w_char;			// unused...
+	uint8_t y_char;			// ...
+	uint8_t planes;
+	uint8_t bpp;			// bits per pixel in this mode
+	uint8_t banks;			// deprecated; total number of banks in this mode
+	uint8_t memory_model;
+	uint8_t bank_size;		// deprecated; size of a bank, almost always 64 KB but may be 16 KB...
+	uint8_t image_pages;
+	uint8_t reserved0;
+
+	uint8_t red_mask;
+	uint8_t red_position;
+	uint8_t green_mask;
+	uint8_t green_position;
+	uint8_t blue_mask;
+	uint8_t blue_position;
+	uint8_t reserved_mask;
+	uint8_t reserved_position;
+	uint8_t direct_color_attributes;
+
+	uint32_t framebuffer;		// physical address of the linear frame buffer; write here to draw to the screen
+	uint32_t off_screen_mem_off;
+	uint16_t off_screen_mem_size;	// size of memory in the framebuffer but not being displayed on the screen
+	uint8_t reserved1[206];
+} __attribute__ ((packed));
+struct vbe_mode_info_structure* vbe_info;
 
 void cmd_end() {
     uint16_t nextpos = start_pos+cmd_size - ((start_pos+cmd_size) % 80) + 80;
@@ -279,11 +322,15 @@ void cmd_end() {
         num_to_str(worldtime, numbuffer);
         print_wposxy(numbuffer, 0x07, 11, start_pos/80 + 1);
         nextpos += 80;
-    } else if (cmpstr("edit ", cmd_buffer)) {
-        uint32_t file = find_file(cmd_buffer+5, (uint8_t*)buffer1, 45, &filebuffer2);
-        if (file) {
-            write_file(&filebuffer2, file, (uint8_t*)teste, 1310);
-        }
+    } else if (cmpstr("run ", cmd_buffer)) {
+        find_file(cmd_buffer+4, (uint8_t*)buffer1, rootsize, &filebuffer2);
+        read_filedata(&filebuffer2, programelf);
+        uintptr_t programoffset = load_elf(programelf);
+        asm volatile(
+            "jmp *%0"
+            :
+            : "r"(programoffset)
+        );
     }
     // final
 
@@ -310,15 +357,19 @@ void kernel() {
     set_pit_freq(100);
     config_idt();
     worldtime = convert_to_nixt(get_cmos_time());
-    worldtime -= 10800; // sincronizar fuso horário
     init_atufs();
     clear();
 
+    uint32_t* framebuffer = (uint32_t*)vbe_info->framebuffer;
+    for (int i = 0; i < (vbe_info->width*vbe_info->height);i++) {
+        framebuffer[i] = 0x00FFFFFF;
+    }
+    /*
     print_wposxy("Bem vindo ao AtuOS! :D", 0x07, 0, 1);
     set_cursor_pos_xy(7, 3);
     print_wposxy("atuos>", 0x07, 0, 3);
     start_pos = 247;
-    read_sector(atufsinfo.file0, (uint16_t*)&filebuffer1, 1);
+    read_sector_part(atufsinfo.file0, (uint16_t*)&filebuffer1, 1);
     rootsize = read_filedata(&filebuffer1, (uint8_t*)buffer1);
     // start cmd
     while (true) {
@@ -344,5 +395,5 @@ void kernel() {
                 cmd_size++;
                 set_cursor_pos(start_pos+cmd_pos);
         }
-    }
+    }*/
 }

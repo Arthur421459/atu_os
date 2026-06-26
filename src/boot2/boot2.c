@@ -86,10 +86,19 @@ void clear() {
     cursorc = 0;
 }
 
-
+struct mbr_partition {
+    uint8_t bootable;
+    uint8_t start_chs[3];
+    uint8_t type;
+    uint8_t end_chs[3];
+    uint32_t start_lba;
+    uint32_t sectors;
+};
 struct vbe_mode_info_structure vbe_info;
 volatile uint32_t* graphic;
 uint8_t drive = 0;
+uint8_t* partaddr;
+
 uint16_t readbufferf[256];
 struct file filebuffer1;
 struct file filebuffer2;
@@ -98,12 +107,12 @@ uint8_t readbuffer2[64];
 
 uintptr_t boot2main() {
     //graphic = (volatile uint32_t*) vbe_info.framebuffer;
+    set_partstart(partaddr);
     init_atufs();
-    read_sector(atufsinfo.file0, (uint16_t*)&filebuffer1, 1); // read file
+    read_sector_part(atufsinfo.file0, (uint16_t*)&filebuffer1, 1); // read file
     uint64_t rootsize = read_filedata(&filebuffer1, readbuffer1);
-    find_file("kernel.elf", readbuffer1, rootsize, &filebuffer2);
+    find_file("kernel.bin", readbuffer1, rootsize, &filebuffer2);
     read_filedata(&filebuffer2, kernel_buffer);
     uintptr_t kernel_offset = load_elf(kernel_buffer);
-
     return kernel_offset;
 }

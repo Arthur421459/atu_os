@@ -1,6 +1,19 @@
 #include "drivers/ata.h"
 #include "lib/io.h"
 #include <stdint.h>
+uint32_t partstart = 0;
+struct part {
+    uint8_t active;
+    uint8_t chsstart[3];
+    uint8_t parttype;
+    uint8_t chsend[3];
+    uint32_t firstlba;
+    uint32_t secamount;
+} __attribute__((packed));
+void set_partstart(void* partaddr) {
+    struct part* part = (struct part*)partaddr;
+    partstart = part->firstlba;
+}
 void read_sector(uint32_t lba, uint16_t* buffer, uint8_t sectors) {
     while ((inb(0x1F7) & 0x80)); // wait ata
     outb(0x1F2, sectors); // sectors quan
@@ -78,4 +91,17 @@ void lwrite_sector(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
         lba += sectors % 256;
         buffer += (sectors % 256)*256;
     }
+}
+void read_sector_part(uint32_t lba, uint16_t *buffer, uint8_t sectors) {
+    read_sector(lba+partstart, buffer, sectors);
+}
+void write_sector_part(uint32_t lba, uint16_t *buffer, uint8_t sectors) {
+    write_sector(lba+partstart, buffer, sectors);
+}
+
+void lread_sector_part(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
+    lread_sector(lba+partstart, buffer, sectors);
+}
+void lwrite_sector_part(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
+    lread_sector(lba+partstart, buffer, sectors);
 }

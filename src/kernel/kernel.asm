@@ -14,6 +14,7 @@ extern clear_bss
 extern int_handler
 extern irq_handler
 extern stack_top
+extern vbe_info
 global int0
 global irq0
 global irq1
@@ -22,11 +23,12 @@ global irqmaslabel
 global irqslavelabel
 global set_idt
 global intlabel
-
+global syscallasm
 _start:
     cli
     cld
     mov esp, stack_top
+    mov [vbe_info], ebx
     call clear_bss
     call kernel
     .hlt: 
@@ -52,6 +54,7 @@ set_idt:
     lidt [eax] ; OMG idt loaded lol
     sti
     ret
+
 
 ; interrupts
 int0:
@@ -125,4 +128,6 @@ irqslavelabel:
     popa
 iretd
 intlabel:
+iretd
+syscallasm:
 iretd
