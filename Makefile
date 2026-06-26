@@ -69,10 +69,6 @@ $(BUILD_DIR)/asm/%.o: src/%.asm
 	@mkdir -p $(dir $@)
 	$(ASMC) $(ASMC_FLAGS) $< -o $@
 
-
-
-mkatufs: hd.img
-	python src/python/mkatufs.py hd.img
 run: all
 	qemu-system-i386 -drive file=hd.img,format=raw,index=0,media=disk
 
