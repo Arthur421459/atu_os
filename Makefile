@@ -20,6 +20,7 @@ C_LIB_SRC  = $(wildcard src/lib/*.c)
 C_TOOLS_SRC = $(wildcard src/tools/*.c)
 
 C_APPS_SRC = $(wildcard src/apps/*.c)
+C_LIBC_SRC = $(wildcard src/libc/*.c)
 SRC_C = $(C_DRIVER_SRC) $(C_LIB_SRC)
 #SRC_ASM
 
@@ -36,6 +37,7 @@ OBJ_BOOT1_ASM = $(patsubst src/boot1/%.asm, $(BUILD_DIR)/%.bin, $(ASM_BOOT1_SRC)
 
 OBJ_APPS_C = $(patsubst src/%.c, $(BUILD_DIR)/c/%.o, $(C_APPS_SRC))
 ELF_APPS_C = $(patsubst $(BUILD_DIR)/c/apps/%.o, rootfs/%, $(OBJ_APPS_C))
+OBJ_LIBC_C = $(patsubst src/%.c, $(BUILD_DIR)/c/%.o, $(C_LIBC_SRC))
 
 OBJ_TOOLS_C = $(patsubst src/tools/%.c, $(TOOLS_DIR)/%, $(C_TOOLS_SRC))
 
@@ -56,6 +58,9 @@ hd.img: kernel.bin $(BUILD_DIR)/boot2.bin $(OBJ_BOOT1_ASM) $(OBJ_TOOLS_C) $(ROOT
 kernel.bin: $(OBJ_C) $(OBJ_KERNEL_C) $(OBJ_KERNEL_ASM) linker/kernel.ld
 	ld $(LD_FLAGS) -T linker/kernel.ld $(OBJ_C) $(OBJ_KERNEL_C) $(OBJ_KERNEL_ASM) -o kernel.bin
 
+build/libatu.a: $(OBJ_LIBC_C)
+	ar rcs $@ $(OBJ_LIBC_C)
+
 $(BUILD_DIR)/boot2.bin: $(OBJ_C) $(OBJ_BOOT2_C) $(OBJ_BOOT2_ASM) linker/boot2.ld
 	ld $(LD_FLAGS) -T linker/boot2.ld $(OBJ_C) $(OBJ_BOOT2_C) $(OBJ_BOOT2_ASM) -o $(BUILD_DIR)/boot2.elf
 	objcopy -O binary $(BUILD_DIR)/boot2.elf $(BUILD_DIR)/boot2.bin
@@ -75,8 +80,10 @@ $(BUILD_DIR)/asm/%.o: src/%.asm
 	@mkdir -p $(dir $@)
 	$(ASMC) $(ASMC_FLAGS) $< -o $@
 
-rootfs/%: $(BUILD_DIR)/c/apps/%.o
-	ld $(LD_FLAGS) -T linker/prog.ld $(OBJ_C) $< -o $@
+
+rootfs/%: $(BUILD_DIR)/c/apps/%.o build/libatu.a
+	ld $(LD_FLAGS) -T linker/prog.ld $< -L$(BUILD_DIR) -latu -o $@
+
 run: all
 	qemu-system-i386 -m 64M -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk
 

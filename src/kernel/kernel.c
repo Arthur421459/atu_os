@@ -208,30 +208,30 @@ void config_idt() {
     for (int i = 0; i < 256; i++) {
         switch (i) {
             case 0:
-                set_interrupt_idt(i, (uintptr_t)&int0, 0x8E, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&int0, 0b10001110, 0x08);
                 break;
             case 32:
-                set_interrupt_idt(i, (uintptr_t)&irq0, 0x8E, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&irq0, 0b10001110, 0x08);
                 break;
             case 33:
-                set_interrupt_idt(i, (uintptr_t)&irq1, 0x8E, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&irq1, 0b10001110, 0x08);
                 break;
             case 37:
-                set_interrupt_idt(i, (uintptr_t)&irq5, 0x8E, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&irq5, 0b10001110, 0x08);
                 break;
             case 44:
-                set_interrupt_idt(i, (uintptr_t)&irq12, 0x8E, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&irq12, 0b10001110, 0x08);
                 break;
             case 0xA7:
-                set_interrupt_idt(i, (uintptr_t)&syscallasm, 0x8E, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&syscallasm, 0b11101110, 0x08);
                 break;
             default:
                 if (i >= 0x20 && i < 0x28) {
-                    set_interrupt_idt(i, (uintptr_t)&irqmaslabel, 0x8E, 0x08);
+                    set_interrupt_idt(i, (uintptr_t)&irqmaslabel, 0b10001110, 0x08);
                 } else if (i >= 0x28 && i <= 0x2F) {
-                    set_interrupt_idt(i, (uintptr_t)&irqslavelabel, 0x8E, 0x08);
+                    set_interrupt_idt(i, (uintptr_t)&irqslavelabel, 0b10001110, 0x08);
                 } else {
-                    set_interrupt_idt(i, (uintptr_t)&intlabel, 0x8E, 0x08);
+                    set_interrupt_idt(i, (uintptr_t)&intlabel, 0b10001110, 0x08);
                 }
                 break;
         }
@@ -257,8 +257,8 @@ void sleep(uint32_t sec) {
     }
 }
 
-void msecsleep(uint32_t msec) {
-    uint32_t ticks_to_wait = (msec + 9) / 10;
+void usleep(uint32_t usec) {
+    uint32_t ticks_to_wait = (usec + 9) / 10;
     
     uint32_t start_total_ticks = (systime * 100) + tick;
     uint32_t target_total_ticks = start_total_ticks + ticks_to_wait;
@@ -474,7 +474,7 @@ uintptr_t syscall_c(struct syscallstack* stack) {
         case 0x82:
             // ebx = microseconds
             asm volatile ("sti");
-            msecsleep(stack->ebx);
+            usleep(stack->ebx);
             asm volatile ("cli");
             break;
         case 10:
@@ -486,6 +486,8 @@ uintptr_t syscall_c(struct syscallstack* stack) {
         case 11:
             // edi buffer =eax sizel =ebx sizeh     esi filebuffer
             size = read_filedata((struct file*)stack->esi, stack->edi);
+            stack->eax = 0;
+            stack->ebx = 0;
             stack->eax = (uint32_t)size;
             stack->ebx = size >> 32 & 0xFFFF;
             break;

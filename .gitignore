@@ -3,3 +3,4 @@ compile_commands.json
 kernel.bin
 hd.img
 tools/
+rootfs/music

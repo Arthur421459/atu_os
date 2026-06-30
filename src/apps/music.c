@@ -1,6 +1,9 @@
 #include <stdint.h>
-#include "lib/atufs.h"
+#include "atuos/time.h"
+#include "lib/bool.h"
 #include "lib/io.h"
+#include "atuos/core.h"
+#include "atuos/file.h"
 int cursor = 0;
 struct file filebuffer1;
 uint8_t* buffer1 = (uint8_t*)0x400000;
@@ -9,7 +12,7 @@ uint32_t music_sizeh;
 uint8_t* a = (uint8_t*)0xB8000;
 bool reset_dsp() {
     outb(0x226, 1);
-    asm ("int $0xA7" :: "a"(0x82), "b"(10) : "memory", "cc");
+    usleep(10);
     outb(0x226, 0);
     while (!(inb(0x22E) & 0x80));
     return (inb(0x22A) == 0xAA);
@@ -56,15 +59,13 @@ void play_pcm(uint32_t srate, uint8_t bits, uint8_t* buffer, uint16_t size) {
     outb(0x22C, size >> 8);
 }
 #define bit16max 0xFFFF
-void wait_irq(uint8_t irq) {
-    asm ("int $0xA7" :: "a"(3), "b"(irq) : "memory", "cc");
-}
+
 
 volatile uint8_t* tvideo = (volatile uint8_t*)0xb8000;
 void main(int argc, char *argv[]) {
     if (argc < 3) return;
-    asm ("int $0xA7" :: "a"(10), "b"(0), "S"(argv[2]), "D"(&filebuffer1) : "memory", "cc");
-    asm ("int $0xA7" :: "a"(11), "S"(&filebuffer1), "D"(buffer1): "memory", "cc");
+    find_file(argv[2], 0, &filebuffer1);
+    read_filedata(&filebuffer1, buffer1);
     if (filebuffer1.size_low > bit16max) {
         uint8_t* ptr = buffer1;
         for (uint32_t i = 0; i < filebuffer1.size_low / bit16max; i++) {
