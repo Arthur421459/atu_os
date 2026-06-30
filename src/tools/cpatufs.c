@@ -171,7 +171,6 @@ void write_file(struct file* f, uint32_t filenum, uint8_t *buffer, uint64_t buff
                 struct extent e = copy.extents[i];
                 if (!e.manyclusters) break;
                 lwrite_sector_part(atufsinfo.cluster0+e.startcluster, (uint16_t*)buffer, e.manyclusters);
-                buffer += e.manyclusters*512;
             }
         } else {
             uint32_t clusters_left = nfilesize_inclus;
@@ -228,6 +227,7 @@ uint64_t read_filedata(struct file* file1, uint8_t* buffer) {
                 break;
             }
             lread_sector_part(atufsinfo.cluster0+(e.startcluster*blockinsec), (uint16_t*)buffer, totalcsectors);
+            buffer += totalcsectors * 5;
         }
         size = ((uint64_t) file1->size_high << 32) | file1->size_low;
         start_buffer[size] = '\0';
@@ -391,10 +391,34 @@ uint32_t create_file(uint8_t* buffer, uint64_t buffer_size, nixt time, uint16_t 
 uint8_t* filebuffer;
 FILE* transferedfile;
 uint64_t transferedfilesize;
+
+void print_hex_string(const char *str) {
+    while (*str) {
+        // %02x forces 2-digit lowercase hex with leading zeros
+        printf("%02x ", (unsigned char)*str);
+        str++;
+    }
+    printf("\n");
+}
+
+
 int main(int argc, char *argv[]) {
-    // args diskimg deslocation filename rootfile
+    // args diskimg deslocation filename dir
     if (argc < 5) return 1;
-    partstart = (atoi(argv[2]) + 511) >> 9;
+    switch (argv[2][strlen(argv[2])-1]) {
+        case 'K':
+            partstart = ((atoi(argv[2]) << 10) + 511) >> 9;
+            break;
+        case 'M':
+            partstart = ((atoi(argv[2]) << 20) + 511) >> 9;
+            break;
+        case 'G':
+            partstart = ((atoi(argv[2]) << 30) + 511) >> 9;
+            break;
+        default:
+            partstart = (atoi(argv[2]) + 511) >> 9;
+            break;
+    }
     hd = fopen(argv[1], "r+b");
     transferedfile = fopen(argv[3], "rb");
     fseek(transferedfile, 0, SEEK_END);
@@ -402,10 +426,42 @@ int main(int argc, char *argv[]) {
     rewind(transferedfile);
     filebuffer = (uint8_t*)malloc(transferedfilesize);
     fread(filebuffer, 1, transferedfilesize, transferedfile);
-    rewind(transferedfile);
+    fclose(transferedfile);
+    
     read_sector_part(0, (uint16_t*)&atufsinfo, 1);
 
     uint32_t nfile = create_file(filebuffer, transferedfilesize, time(NULL), 0, 0);
-    create_entry(nfile, atoi(argv[4]), (uint8_t*)argv[3], 0x20, strlen(argv[3]));
+    free(filebuffer);
+
+    read_sector_part(0, (uint16_t*)&atufsinfo, 1);
+
+    uint32_t dir = 0;
+    char namebuffer[256];
+    memset(namebuffer, 0, 256);
+    memcpy(namebuffer, argv[4], strlen(argv[4]));
+
+
+    char* token = strtok(namebuffer, "/");
+
+    struct file* fbuffer = (struct file*)malloc(sizeof(struct file));
+    read_sector_part(atufsinfo.file0, (uint16_t*)fbuffer, 1);
+
+    uint8_t* dirbuffer = (uint8_t*)malloc((uint64_t)(fbuffer->size_high) << 32 | fbuffer->size_low+1);
+    read_filedata(fbuffer,dirbuffer);
+
+    while (token != NULL) {
+        char* next_token = strtok(NULL, "/");
+        if (next_token == NULL) {break;}
+
+        dir = find_file(token, dirbuffer, (uint64_t)(fbuffer->size_high) << 32 | fbuffer->size_low, fbuffer);
+        free(dirbuffer);
+        dirbuffer = (uint8_t*)malloc((uint64_t)(fbuffer->size_high) << 32 | fbuffer->size_low+1);
+        read_filedata(fbuffer, dirbuffer);
+        token = next_token;
+    }
+
+    create_entry(nfile, dir, (uint8_t*)token, 0x20, strlen(token));
+
+    fclose(hd);
     return 0;
 }

@@ -14,10 +14,12 @@ extern clear_bss
 extern int_handler
 extern irq_handler
 extern stack_top
-extern vbe_info
+extern binfo
+extern syscall_c
 global int0
 global irq0
 global irq1
+global irq5
 global irq12
 global irqmaslabel
 global irqslavelabel
@@ -28,7 +30,7 @@ _start:
     cli
     cld
     mov esp, stack_top
-    mov [vbe_info], ebx
+    mov [binfo], esi
     call clear_bss
     call kernel
     .hlt: 
@@ -52,7 +54,7 @@ set_gdt:
 set_idt:
     mov eax, [esp+4]
     lidt [eax] ; OMG idt loaded lol
-    sti
+    sti ; olá interrupções!!!!! (sem bios.........)
     ret
 
 
@@ -68,6 +70,9 @@ irq1:
     jmp irq_common
 irq12:
     push dword 12
+    jmp irq_common
+irq5:
+    push dword 5
     jmp irq_common
 irq0:
     push dword 0
@@ -130,4 +135,35 @@ iretd
 intlabel:
 iretd
 syscallasm:
+    push gs
+    push fs
+    push es
+    push ds
+    push ebp
+    push esi
+    push edi
+    push edx
+    push ecx
+    push ebx
+    push eax
+    push esp ; stack pointer
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    call syscall_c
+    add esp, 4
+    mov [esp], eax
+    pop eax
+    pop ebx
+    pop ecx
+    pop edx
+    pop edi
+    pop esi
+    pop ebp
+    pop ds
+    pop es
+    pop fs
+    pop gs
 iretd

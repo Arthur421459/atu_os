@@ -32,9 +32,8 @@ void read_sector(uint32_t lba, uint16_t* buffer, uint8_t sectors) {
         uint8_t status;
         do {
             status = inb(0x1F7);
-            if (status & 1) {
-                return;
-            }
+            if (status & 0x20) return;
+            if (status & 1) return;
         } while (!(status & 8));
         for (int j = 0; j < 256; j++) {
             *buffer++ = inw(0x1F0);
@@ -53,12 +52,16 @@ void write_sector(uint32_t lba, uint16_t *buffer, uint8_t sectors) {
     
     outb(0x1F6, 0b11100000 | ((lba >> 24) & 0x0F));
     outb(0x1F7, 0x30); // WRITEEEEEEE
-
-    for (uint8_t i = 0; i < sectors; i++) {
+    uint16_t sc = sectors;
+    if (sc == 0) {
+        sc = 256;
+    }
+    for (int i = 0; i < sc; i++) {
         uint8_t status;
         do {
             status = inb(0x1F7);
-            if (status & 1) {return;}
+            if (status & 0x20) return;
+            if (status & 1) return;
         } while (!(status & 8));
         
         for (uint16_t j = 0; j < 256;j++) {
@@ -103,5 +106,5 @@ void lread_sector_part(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
     lread_sector(lba+partstart, buffer, sectors);
 }
 void lwrite_sector_part(uint32_t lba, uint16_t *buffer, uint32_t sectors) {
-    lread_sector(lba+partstart, buffer, sectors);
+    lwrite_sector(lba+partstart, buffer, sectors);
 }

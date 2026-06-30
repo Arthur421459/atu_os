@@ -1,5 +1,6 @@
 #include "drivers/ata.h"
 #include "lib/bool.h"
+#include "lib/bootinfo.h"
 #include "lib/io.h"
 #include "drivers/keyboard.h"
 #include "lib/atufs.h"
@@ -16,6 +17,7 @@ extern void set_gdt(uint32_t gp_ptr);
 extern void int0();
 extern void irq0();
 extern void irq1();
+extern void irq5();
 extern void irq12();
 extern void irqmaslabel();
 extern void irqslavelabel();
@@ -140,10 +142,10 @@ void int_handler(uint32_t num) {
             break;
     }
 }
-int a = 0;
-int tick = 0;
-uint32_t systime = 0;
-nixt worldtime = 0;
+volatile uint32_t tick = 0;
+volatile uint32_t systime = 0;
+volatile nixt worldtime = 0;
+volatile uint32_t irqcount[16];
 void irq_handler(uint32_t irqx) {
     switch (irqx) {
         case 0:
@@ -157,10 +159,13 @@ void irq_handler(uint32_t irqx) {
         case 1:
             irq1code();
             break;
+        case 5:
+            inb(0x22E);
+            break;
         case 12:
             break;
     }
-    
+    irqcount[irqx]++;
     if (irqx >= 8) {
         outb(SlavePIC_code, 0x20);
     }
@@ -211,6 +216,9 @@ void config_idt() {
             case 33:
                 set_interrupt_idt(i, (uintptr_t)&irq1, 0x8E, 0x08);
                 break;
+            case 37:
+                set_interrupt_idt(i, (uintptr_t)&irq5, 0x8E, 0x08);
+                break;
             case 44:
                 set_interrupt_idt(i, (uintptr_t)&irq12, 0x8E, 0x08);
                 break;
@@ -243,7 +251,18 @@ void clear_bss() {
 
 void sleep(uint32_t sec) {
     uint32_t target = systime + sec;
+    
     while (systime < target) {
+        asm volatile ("hlt");
+    }
+}
+
+void msecsleep(uint32_t msec) {
+    uint32_t ticks_to_wait = (msec + 9) / 10;
+    
+    uint32_t start_total_ticks = (systime * 100) + tick;
+    uint32_t target_total_ticks = start_total_ticks + ticks_to_wait;
+    while (((systime * 100) + tick) < target_total_ticks) {
         asm volatile ("hlt");
     }
 }
@@ -264,47 +283,10 @@ uint8_t cmd_pos;
 uint64_t rootsize = 45;
 char numbuffer[5];
 
-char teste[13] = "kasjdkasjkda";
-char oldname[10] = "teste.txt";
-uint8_t* programelf = (uint8_t*)0x300000;
-struct vbe_mode_info_structure {
-	uint16_t attributes;		// deprecated, only bit 7 should be of interest to you, and it indicates the mode supports a linear frame buffer.
-	uint8_t window_a;			// deprecated
-	uint8_t window_b;			// deprecated
-	uint16_t granularity;		// deprecated; used while calculating bank numbers
-	uint16_t window_size;
-	uint16_t segment_a;
-	uint16_t segment_b;
-	uint32_t win_func_ptr;		// deprecated; used to switch banks from protected mode without returning to real mode
-	uint16_t pitch;			// number of bytes per horizontal line
-	uint16_t width;			// width in pixels
-	uint16_t height;			// height in pixels
-	uint8_t w_char;			// unused...
-	uint8_t y_char;			// ...
-	uint8_t planes;
-	uint8_t bpp;			// bits per pixel in this mode
-	uint8_t banks;			// deprecated; total number of banks in this mode
-	uint8_t memory_model;
-	uint8_t bank_size;		// deprecated; size of a bank, almost always 64 KB but may be 16 KB...
-	uint8_t image_pages;
-	uint8_t reserved0;
-
-	uint8_t red_mask;
-	uint8_t red_position;
-	uint8_t green_mask;
-	uint8_t green_position;
-	uint8_t blue_mask;
-	uint8_t blue_position;
-	uint8_t reserved_mask;
-	uint8_t reserved_position;
-	uint8_t direct_color_attributes;
-
-	uint32_t framebuffer;		// physical address of the linear frame buffer; write here to draw to the screen
-	uint32_t off_screen_mem_off;
-	uint16_t off_screen_mem_size;	// size of memory in the framebuffer but not being displayed on the screen
-	uint8_t reserved1[206];
-} __attribute__ ((packed));
-struct vbe_mode_info_structure* vbe_info;
+uint8_t* programelf = (uint8_t*)0x500000;
+uint32_t raminbytes = 0;
+uintptr_t start;
+char *argv[20];
 
 void cmd_end() {
     uint16_t nextpos = start_pos+cmd_size - ((start_pos+cmd_size) % 80) + 80;
@@ -323,14 +305,42 @@ void cmd_end() {
         print_wposxy(numbuffer, 0x07, 11, start_pos/80 + 1);
         nextpos += 80;
     } else if (cmpstr("run ", cmd_buffer)) {
-        find_file(cmd_buffer+4, (uint8_t*)buffer1, rootsize, &filebuffer2);
+        argv[0] = cmd_buffer;
+        int a = 1;
+        for (int i = 0;i < cmd_size;i++) {
+            if (cmd_buffer[i] == 0x20) {
+                cmd_buffer[i] = 0;
+                argv[a++] = cmd_buffer+i+1;
+            }
+        }
+        find_file(argv[1], (uint8_t*)buffer1, rootsize, &filebuffer2);
         read_filedata(&filebuffer2, programelf);
         uintptr_t programoffset = load_elf(programelf);
+        if (!programoffset) {
+            programoffset = start;
+        }
+        print_wpos("atuos>", 0x07, nextpos);
+        set_cursor_pos(nextpos + 7);
+        start_pos = nextpos+7;
+        cmd_size = 0;
+        cmd_pos = 0;
+
+        int argc = a;
+
         asm volatile(
-            "jmp *%0"
+            "pushl %1\n "
+            "pushl %2\n "
+            "pushl %3\n "
+            "jmp *%0\n  "
             :
-            : "r"(programoffset)
+            : "r" (programoffset), "r" (argv), "r" (argc), "r" (start)
+            : "memory"
         );
+    } else if (cmpstr("ram", cmd_buffer)) {
+        num_to_str(raminbytes >> 20, numbuffer);
+        print_wposxy("RAM in MB: ", 0x07, 0, start_pos/80 + 1);
+        print_wposxy(numbuffer, 0x07, 11, start_pos/80 + 1);
+        nextpos += 80;
     }
     // final
 
@@ -346,9 +356,43 @@ void cmd_end() {
 void set_pit_freq(uint32_t freq) {
     uint16_t div = initialpic_freq / freq;
     outb(0x43, 0b00110111); // set command (channel 0, square wave)
-
     outb(0x40, div & 0xFF); // low
     outb(0x40, div >> 8); // high
+}
+
+struct boot_info* binfo;
+void calculateram() {
+    for (int i = 0; i < binfo->total_smaps;i++) {
+        
+        if (binfo->smaps[i].type == 1) {
+            raminbytes += binfo->smaps[i].length;
+        }
+    }
+}
+struct syscallstack {
+
+    uint32_t eax;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+
+    void* edi;
+    void* esi;
+    uint32_t ebp;
+
+    uint32_t ds;
+    uint32_t es;
+    uint32_t fs;
+    uint32_t gs;
+    
+    void* eip;
+    uint32_t cs;
+    uint32_t eflags;
+} __attribute__((packed));
+
+void set_irq5() {
+    outb(0x224, 0x80);
+    outb(0x225, 2);
 }
 
 void kernel() {
@@ -357,14 +401,12 @@ void kernel() {
     set_pit_freq(100);
     config_idt();
     worldtime = convert_to_nixt(get_cmos_time());
+    set_partstart(binfo->partaddr);
     init_atufs();
     clear();
-
-    uint32_t* framebuffer = (uint32_t*)vbe_info->framebuffer;
-    for (int i = 0; i < (vbe_info->width*vbe_info->height);i++) {
-        framebuffer[i] = 0x00FFFFFF;
-    }
-    /*
+    set_irq5();
+    memset((void*)0x500000, 0, 1 << 20);
+    calculateram();
     print_wposxy("Bem vindo ao AtuOS! :D", 0x07, 0, 1);
     set_cursor_pos_xy(7, 3);
     print_wposxy("atuos>", 0x07, 0, 3);
@@ -372,6 +414,9 @@ void kernel() {
     read_sector_part(atufsinfo.file0, (uint16_t*)&filebuffer1, 1);
     rootsize = read_filedata(&filebuffer1, (uint8_t*)buffer1);
     // start cmd
+    start = (uintptr_t)&&inicio;
+    inicio:
+    memset(cmd_buffer, 0, 128);
     while (true) {
         out_key key = waitget_key();
         switch (key.asciicode) {
@@ -384,6 +429,7 @@ void kernel() {
                 set_cursor_pos(start_pos+cmd_pos);
                 break;
             case '\n':
+                rootsize = read_filedata(&filebuffer1, (uint8_t*)buffer1);
                 cmd_end();
                 break;
             case 0:
@@ -395,5 +441,54 @@ void kernel() {
                 cmd_size++;
                 set_cursor_pos(start_pos+cmd_pos);
         }
-    }*/
+    }
+}
+uint32_t old;
+uint64_t size;
+uintptr_t syscall_c(struct syscallstack* stack) {
+    switch (stack->eax) {
+        case 0:
+            stack->eip = (void*)start;
+            break;
+        case 1:
+            // esi: pointer, ebx: pos
+            print_wpos((char*)stack->esi, 0x07, stack->ebx);
+            break;
+        case 2:
+            // ebx = seconds
+            asm volatile ("sti");
+            sleep(stack->ebx);
+            asm volatile ("cli");
+            break;
+        case 3:
+            old = irqcount[stack->ebx];
+
+            asm volatile("sti");
+
+            while (irqcount[stack->ebx] == old) {
+                asm volatile("hlt");
+            }
+
+            asm volatile("cli");
+            break;
+        case 0x82:
+            // ebx = microseconds
+            asm volatile ("sti");
+            msecsleep(stack->ebx);
+            asm volatile ("cli");
+            break;
+        case 10:
+            // edi filebuffer =eax filenum    ebx root, esi name
+            read_sector_part(atufsinfo.file0+stack->ebx, (uint16_t*)&filebuffer2, 1);
+            size = read_filedata(&filebuffer2, (uint8_t*)buffer2);
+            stack->eax = find_file(stack->esi, (uint8_t*)buffer2, size, stack->edi);
+            break;
+        case 11:
+            // edi buffer =eax sizel =ebx sizeh     esi filebuffer
+            size = read_filedata((struct file*)stack->esi, stack->edi);
+            stack->eax = (uint32_t)size;
+            stack->ebx = size >> 32 & 0xFFFF;
+            break;
+    }
+    return 0;
 }

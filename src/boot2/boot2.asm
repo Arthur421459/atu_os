@@ -4,6 +4,7 @@ extern boot2main
 extern vbe_info
 extern partaddr
 extern partstart
+extern total_smaps
 global _start
 _start:
     xor ax, ax
@@ -11,13 +12,14 @@ _start:
     mov es, ax
     mov [partaddr], esi ; salvar o ponteiro
     mov [drive], dl ; salvar o drive
-    mov ax, 0x4f02
-    mov bx, 324
-    int 10h
-    mov ax, 0x4f01
-    mov cx, 324
-    mov di, vbe_info
-    int 10h
+    ; mov ax, 0x4f02
+    ; mov bx, 324
+    ; int 10h
+    ; mov ax, 0x4f01
+    ; mov cx, 324
+    ; mov di, vbe_info
+    ; int 10h
+    call getram
     cli ; adeus interrupções.....
     in al, 0x92
     test al, 2 ; ver se a20 já foi ativado
@@ -31,6 +33,31 @@ _start:
     or eax, 1 ; not even :|
     mov cr0, eax
     jmp 0x08:start32
+
+getram:
+    pusha 
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov di, 0x500
+    mov ebx, 0
+    mov si, 0
+    .lp:
+        inc si
+        mov eax, 0xE820
+        mov ecx, 20
+        mov edx, 0x534D4150 ; "SMAP"
+        clc
+        int 15h
+        jc .end
+        cmp ebx, 0
+        je .end
+        add di, cx
+        jmp .lp
+    .end:
+        mov [total_smaps], si
+        popa
+        ret
 
 gdt:
     dq 0 ; null entry
@@ -64,7 +91,7 @@ start32:
     mov esp, 0x90000
     call boot2main
     mov ebx, vbe_info
-    mov esi, [partaddr]
+    mov esi, 0x5000
     jmp eax
     hlt
 

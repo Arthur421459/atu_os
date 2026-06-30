@@ -25,7 +25,7 @@ uint64_t read_filedata(struct file* file1, uint8_t* buffer) {
             }
             lread_sector_part(atufsinfo.cluster0+(e.startcluster*blockinsec), (uint16_t*)buffer, totalcsectors);
         }
-        size = ((uint64_t) file1->size_high << 32) | file1->size_low;
+        size = ((uint64_t)(file1->size_high) << 32) | file1->size_low;
         start_buffer[size] = '\0';
         return size;
     } else {
@@ -303,8 +303,6 @@ uint32_t create_file(uint8_t* buffer, uint64_t buffer_size, nixt time, uint16_t 
         return 0;
     }
     struct file file = {0};
-    file.size_low = (uint32_t)buffer_size;
-    file.size_high = (buffer_size >> 32) & 0xFFFF;
     file.user_id = userid;
     file.creation = time;
     file.last_access = time;
