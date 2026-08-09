@@ -85,7 +85,10 @@ rootfs/%: $(BUILD_DIR)/c/apps/%.o build/libatu.a
 	ld $(LD_FLAGS) -T linker/prog.ld $< -L$(BUILD_DIR) -latu -o $@
 
 run: all
-	qemu-system-i386 -m 64M -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk
+	qemu-system-i386 -m 512M -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk
+
+triple: all
+	qemu-system-i386 -m 512M -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk -d int -no-reboot -no-shutdown
 
 gdb: all
 	qemu-system-i386 -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk -s -S &
@@ -93,4 +96,5 @@ gdb: all
 	gdb -ex 'target remote localhost:1234' ./kernel.bin
 clean:
 	rm -rf $(BUILD_DIR) $(TOOLS_DIR) kernel.bin hd.img $(ELF_APPS_C)
-.PHONY: all run gdb clean fstools
+
+.PHONY: all run gdb clean triple

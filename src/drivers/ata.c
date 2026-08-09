@@ -1,6 +1,6 @@
 #include "drivers/ata.h"
 #include "lib/io.h"
-#include <stdint.h>
+#include "lib/main.h"
 uint32_t partstart = 0;
 struct part {
     uint8_t active;

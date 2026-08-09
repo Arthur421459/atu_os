@@ -1,6 +1,6 @@
 #ifndef TIME_H
 #define TIME_H
-#include <stdint.h>
+#include "lib/main.h"
 typedef uint32_t nixt;
 void sleep(uint32_t sec);
 void usleep(uint32_t usec);

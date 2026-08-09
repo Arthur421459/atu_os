@@ -1,31 +1,28 @@
 #include "drivers/ata.h"
-#include "lib/bool.h"
-#include "lib/bootinfo.h"
+#include "lib/main.h"
+#include "kernel/bootinfo.h"
 #include "lib/io.h"
 #include "drivers/keyboard.h"
 #include "lib/atufs.h"
 #include "lib/string.h"
 #include "drivers/cmos.h"
 #include "lib/elf.h"
-#include <stdint.h>
+#include "kernel/paging.h"
+#include "kernel/gdt.h"
+#include "kernel/apic.h"
+#include "kernel/heap.h"
+
+
+
 volatile char* tvideo = (volatile char*) 0xB8000;
+extern uintptr_t stack_top;
+
 int cursor = 0;
 int cursorc = 0;
 
 // asm functions
-extern void set_gdt(uint32_t gp_ptr);
-extern void int0();
-extern void irq0();
-extern void irq1();
-extern void irq5();
-extern void irq12();
-extern void irqmaslabel();
-extern void irqslavelabel();
-extern void intlabel();
-extern void set_idt(uint32_t itr);
-extern void syscallasm();
-
-// funções aleatorias
+extern void set_pag(uintptr_t addr);
+extern void jmp_prog(uintptr_t eip, uintptr_t esp);
 
 void set_cursor_pos(uint16_t pos) {
     outb(0x3d4, 0x0F); // set reg
@@ -68,79 +65,15 @@ void clear() {
         }
     }
 }
-
-// gdt
-
-struct gdt_entry
-{
-    uint16_t limit_low;
-    uint16_t base_low;
-    uint8_t  base_middle;
-    uint8_t  access;
-    uint8_t  granularity;
-    uint8_t  base_high;
-} __attribute__((packed));
-
-struct gdt_ptr {
-    uint16_t limit;
-    uint32_t base;
-} __attribute__((packed));
-
-struct gdt_entry gdt[5];
-struct gdt_ptr gp;
-
-
-void gdt_set_entry(int seg, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran) {
-    gdt[seg].base_low = base & 0xFFFF;
-    gdt[seg].base_middle = (base >> 16) & 0xFF;
-    gdt[seg].base_high = (base >> 24) & 0xFF;
-
-    gdt[seg].limit_low = limit & 0xFFFF;
-    gdt[seg].granularity = (limit >> 16) & 0xF;
-    gdt[seg].granularity |= gran & 0xF0; // 0xf0 = 111100000
-    gdt[seg].access = access;
-}
-void config_gdt() {
-    gp.base = (uintptr_t)&gdt;
-    gp.limit = sizeof(gdt) - 1;
-    gdt_set_entry(0,0,0,0,0); // null seg
-
-    gdt_set_entry(1, 0, 0xFFFFFFFF, 0x9A, 0xC0); // kernel code seg 0x08
-    gdt_set_entry(2, 0, 0xFFFFFFFF, 0x92, 0xC0); // kernel data seg 0x10
-    
-    gdt_set_entry(3, 0, 0xFFFFFFFF, 0xFA, 0xC0); // user code seg 0x18
-    gdt_set_entry(4, 0, 0xFFFFFFFF, 0xF2, 0xC0); // user data seg 0x20
-    set_gdt((uintptr_t)&gp);
-}
-
 // idt
-
-struct idt_entry {
-    uint16_t low_offset;
-    uint16_t selector;
-    uint8_t reserved_zero;
-    uint8_t attributes;
-    uint16_t high_offset;
-} __attribute__((packed));
-struct idt_ptr {
-    uint16_t limit;
-    uint32_t base;
-} __attribute__((packed));
-
-
-struct idt_entry idt[256];
-struct idt_ptr itr;
-#define MasterPIC_code 0x20
-#define SlavePIC_code 0xA0
-#define MasterPIC_data 0x21
-#define SlavePIC_data 0xA1
-
 void int_handler(uint32_t num) {
     switch (num) {
         case 0:
             print_wpos("Voce ja estudou matematica na escola?", 0x07, 0);
             break;
     }
+    ktss.esp0 = stack_top;
+    ktss.ss0 = kerneldata_seg;
 }
 volatile uint32_t tick = 0;
 volatile uint32_t systime = 0;
@@ -170,83 +103,8 @@ void irq_handler(uint32_t irqx) {
         outb(SlavePIC_code, 0x20);
     }
     outb(MasterPIC_code, 0x20);
-}
-void remap_pic(uint8_t master_ofs, uint8_t slave_ofs) {
-    // Master = IRQ0 - IRQ7
-    // Slave = IRQ8 - IRQ15
-
-    outb(MasterPIC_code, 0x11);
-    outb(SlavePIC_code, 0x11);
-
-    outb(MasterPIC_data, master_ofs);
-    outb(SlavePIC_data, slave_ofs);
-
-    outb(MasterPIC_data, 4); // dizer para o master que o slave está ligado ao irq2 no master
-    outb(SlavePIC_data, 2);
-
-    outb(MasterPIC_data, 1); // 8080 -> 8086
-    outb(SlavePIC_data, 1);
-
-    outb(MasterPIC_data, 0); // desmascarar
-    outb(SlavePIC_data, 0);
-}
-
-
-
-void set_interrupt_idt(int i,uint32_t offset, uint8_t attributes, uint16_t selector) {
-    idt[i].low_offset = offset & 0xFFFF;
-    idt[i].high_offset = (offset >> 16) & 0xFFFF;
-    
-    idt[i].attributes = attributes;
-    idt[i].selector = selector;
-
-    idt[i].reserved_zero = 0; // nunca se sabe ne?
-}
-void config_idt() {
-    itr.base = (uintptr_t)&idt;
-    itr.limit = sizeof(idt) - 1;
-    for (int i = 0; i < 256; i++) {
-        switch (i) {
-            case 0:
-                set_interrupt_idt(i, (uintptr_t)&int0, 0b10001110, 0x08);
-                break;
-            case 32:
-                set_interrupt_idt(i, (uintptr_t)&irq0, 0b10001110, 0x08);
-                break;
-            case 33:
-                set_interrupt_idt(i, (uintptr_t)&irq1, 0b10001110, 0x08);
-                break;
-            case 37:
-                set_interrupt_idt(i, (uintptr_t)&irq5, 0b10001110, 0x08);
-                break;
-            case 44:
-                set_interrupt_idt(i, (uintptr_t)&irq12, 0b10001110, 0x08);
-                break;
-            case 0xA7:
-                set_interrupt_idt(i, (uintptr_t)&syscallasm, 0b11101110, 0x08);
-                break;
-            default:
-                if (i >= 0x20 && i < 0x28) {
-                    set_interrupt_idt(i, (uintptr_t)&irqmaslabel, 0b10001110, 0x08);
-                } else if (i >= 0x28 && i <= 0x2F) {
-                    set_interrupt_idt(i, (uintptr_t)&irqslavelabel, 0b10001110, 0x08);
-                } else {
-                    set_interrupt_idt(i, (uintptr_t)&intlabel, 0b10001110, 0x08);
-                }
-                break;
-        }
-    }
-    
-    set_idt((uintptr_t)&itr);
-}
-
-extern char bss_start;
-extern char bss_end;
-void clear_bss() {
-    uint8_t *p = (uint8_t*)&bss_start;
-    for (int i = 0; i < bss_end; i++) {
-        p[i] = 0;
-    }
+    ktss.esp0 = stack_top;
+    ktss.ss0 = kerneldata_seg;
 }
 
 void sleep(uint32_t sec) {
@@ -267,13 +125,6 @@ void usleep(uint32_t usec) {
     }
 }
 
-struct file filebuffer1;
-struct file filebuffer2;
-
-uint16_t buffer1[256];
-uint16_t buffer2[1024];
-uint16_t buffer3[256];
-
 uint16_t start_pos;
 
 uint8_t cmd_size;
@@ -283,94 +134,11 @@ uint8_t cmd_pos;
 uint64_t rootsize = 45;
 char numbuffer[5];
 
-uint8_t* programelf = (uint8_t*)0x500000;
-uint32_t raminbytes = 0;
-uintptr_t start;
-char *argv[20];
+extern struct boot_info* binfo;
 
-void cmd_end() {
-    uint16_t nextpos = start_pos+cmd_size - ((start_pos+cmd_size) % 80) + 80;
-    if (cmpstr("echo ", cmd_buffer)) {
-        print_wposxy(cmd_buffer+5, 0x07, 0, (start_pos+cmd_size)/80 + 1);
-        nextpos += 160;
-    } else if (cmpstr("cat ", cmd_buffer)) {
-        find_file(cmd_buffer+4, (uint8_t*)buffer1, 45, &filebuffer2);
-        uint64_t size = read_filedata(&filebuffer2, (uint8_t*)buffer2);
-        buffer2[size] = '\0';
-        print_wposxy((char*)buffer2, 0x07, 0, start_pos/80 + 1);
-        nextpos += 80 + 80*(((uint32_t)size + 79) / 80);
-    } else if (cmpstr("time", cmd_buffer)) {
-        print_wposxy("Unix Time: ", 0x07, 0, start_pos/80 + 1);
-        num_to_str(worldtime, numbuffer);
-        print_wposxy(numbuffer, 0x07, 11, start_pos/80 + 1);
-        nextpos += 80;
-    } else if (cmpstr("run ", cmd_buffer)) {
-        argv[0] = cmd_buffer;
-        int a = 1;
-        for (int i = 0;i < cmd_size;i++) {
-            if (cmd_buffer[i] == 0x20) {
-                cmd_buffer[i] = 0;
-                argv[a++] = cmd_buffer+i+1;
-            }
-        }
-        find_file(argv[1], (uint8_t*)buffer1, rootsize, &filebuffer2);
-        read_filedata(&filebuffer2, programelf);
-        uintptr_t programoffset = load_elf(programelf);
-        if (!programoffset) {
-            programoffset = start;
-        }
-        print_wpos("atuos>", 0x07, nextpos);
-        set_cursor_pos(nextpos + 7);
-        start_pos = nextpos+7;
-        cmd_size = 0;
-        cmd_pos = 0;
 
-        int argc = a;
-
-        asm volatile(
-            "pushl %1\n "
-            "pushl %2\n "
-            "pushl %3\n "
-            "jmp *%0\n  "
-            :
-            : "r" (programoffset), "r" (argv), "r" (argc), "r" (start)
-            : "memory"
-        );
-    } else if (cmpstr("ram", cmd_buffer)) {
-        num_to_str(raminbytes >> 20, numbuffer);
-        print_wposxy("RAM in MB: ", 0x07, 0, start_pos/80 + 1);
-        print_wposxy(numbuffer, 0x07, 11, start_pos/80 + 1);
-        nextpos += 80;
-    }
-    // final
-
-    print_wpos("atuos>", 0x07, nextpos);
-    set_cursor_pos(nextpos + 7);
-    memset(cmd_buffer, 0, 128);
-    start_pos = nextpos+7;
-    cmd_size = 0;
-    cmd_pos = 0;
-
-}
-#define initialpic_freq 1193182
-void set_pit_freq(uint32_t freq) {
-    uint16_t div = initialpic_freq / freq;
-    outb(0x43, 0b00110111); // set command (channel 0, square wave)
-    outb(0x40, div & 0xFF); // low
-    outb(0x40, div >> 8); // high
-}
-
-struct boot_info* binfo;
-void calculateram() {
-    for (int i = 0; i < binfo->total_smaps;i++) {
-        
-        if (binfo->smaps[i].type == 1) {
-            raminbytes += binfo->smaps[i].length;
-        }
-    }
-}
-struct syscallstack {
-
+struct irqotherstack {
+    uint32_t sysenterorint;
     uint32_t eax;
     uint32_t ebx;
     uint32_t ecx;
@@ -390,107 +158,190 @@ struct syscallstack {
     uint32_t eflags;
 } __attribute__((packed));
 
-void set_irq5() {
-    outb(0x224, 0x80);
-    outb(0x225, 2);
+void add_page_essential(uint32_t* ptr, uint32_t physptrpage) {
+    memcpy(ptr, page_directory, 1024); // get the base
+    ptr[832] = 0;
+    map_page(ptr, physptrpage, 0xD0000, 1, page_present | page_writable | sysmisc_pagedir,
+    page_present | page_writable | sysmisc_pagetble | full_pagedir);
 }
 
-void kernel() {
-    config_gdt();
-    remap_pic(0x20, 0x28);
-    set_pit_freq(100);
-    config_idt();
-    worldtime = convert_to_nixt(get_cmos_time());
-    set_partstart(binfo->partaddr);
-    init_atufs();
-    clear();
-    set_irq5();
-    memset((void*)0x500000, 0, 1 << 20);
-    calculateram();
-    print_wposxy("Bem vindo ao AtuOS! :D", 0x07, 0, 1);
-    set_cursor_pos_xy(7, 3);
-    print_wposxy("atuos>", 0x07, 0, 3);
-    start_pos = 247;
-    read_sector_part(atufsinfo.file0, (uint16_t*)&filebuffer1, 1);
-    rootsize = read_filedata(&filebuffer1, (uint8_t*)buffer1);
-    // start cmd
-    start = (uintptr_t)&&inicio;
-    inicio:
-    memset(cmd_buffer, 0, 128);
-    while (true) {
-        out_key key = waitget_key();
-        switch (key.asciicode) {
-            case '\b':
-                if (cmd_pos < 1) {break;}
-                cmd_pos--;
-                cmd_size--;
-                printchar_wpos(' ', 0x07, start_pos+cmd_pos);
-                cmd_buffer[cmd_pos] = ' ';
-                set_cursor_pos(start_pos+cmd_pos);
-                break;
-            case '\n':
-                rootsize = read_filedata(&filebuffer1, (uint8_t*)buffer1);
-                cmd_end();
-                break;
-            case 0:
-                break;
-            default:
-                if (cmd_pos >= 128) {break;}
-                printchar_wpos(key.asciicode, 0x07, start_pos+cmd_pos);
-                cmd_buffer[cmd_pos++] = key.asciicode;
-                cmd_size++;
-                set_cursor_pos(start_pos+cmd_pos);
-        }
+
+
+tuple load_program(uint8_t* programptr) {
+    tuple prog = {0};
+    if (!is_compatible(programptr)) return prog;
+    uint32_t pagedirpage = ppalloc(1);
+    uint32_t* pagediraddr = phys_to_virt(pagedirpage, 1, sysmisc_pagetble | page_present);
+    add_page_essential(pagediraddr, pagedirpage);
+    struct elf_header* elfh = (struct elf_header*)programptr;
+    struct ph_entry* ph_entries = (struct ph_entry*)(programptr+elfh->pheader_ofs);
+    for (int i = 0; i < elfh->entrynum_ph; i++) {
+        struct ph_entry entry = ph_entries[i];
+        if (entry.seg_type != 1) continue;
+        uint8_t* ph_ptr = (uint8_t*)amalloc(entry.p_memsz, page_present | page_writable | sysmisc_pagetble,
+        page_present | page_writable | sysmisc_pagedir);
+        struct malloc_header* hd = (struct malloc_header*)(ph_ptr-sizeof(struct malloc_header));
+        memcpy(ph_ptr, programptr+entry.p_offset, entry.p_filesz);
+        map_page(pagediraddr, hd->phys_page, entry.p_vaddr >> 12, (entry.p_memsz+4095) >> 12,
+        page_present | page_writable | user_page | prog_pagetble, 
+        page_present | page_writable | user_page | prog_pagedir);
     }
+    prog.a = elfh->pentry_ofs;
+    prog.b = pagedirpage << 12;
+
+    return prog;
 }
-uint32_t old;
-uint64_t size;
-uintptr_t syscall_c(struct syscallstack* stack) {
-    switch (stack->eax) {
+
+
+void kernel() {
+    worldtime = convert_to_nixt(get_cmos_time());
+    tvideo = phys_to_virt(0xb8, 1, page_present | page_writable);
+    clear();
+    print_wpos("Bem-vindo(a) ao AtuOS! :D", 0x07, 0);
+    while(1);
+}
+
+
+
+
+struct syscall_result {
+    uint32_t ret;
+    uint32_t eax;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+    void* esi;
+    void* edi;
+};
+
+struct syscall_result syscall_c(uint32_t eax, uint32_t ebx, uint32_t ecx, uint32_t edx, void* esi, void* edi) {
+    struct syscall_result result;
+    switch (eax) {
         case 0:
-            stack->eip = (void*)start;
+            while(1);
             break;
         case 1:
             // esi: pointer, ebx: pos
-            print_wpos((char*)stack->esi, 0x07, stack->ebx);
+            print_wpos((char*)esi, 0x07, ebx);
             break;
         case 2:
             // ebx = seconds
             asm volatile ("sti");
-            sleep(stack->ebx);
+            sleep(ebx);
             asm volatile ("cli");
             break;
-        case 3:
-            old = irqcount[stack->ebx];
-
+        case 3: {
+            uint32_t old;
+            old = irqcount[ebx];
             asm volatile("sti");
 
-            while (irqcount[stack->ebx] == old) {
+            while (irqcount[ebx] == old) {
                 asm volatile("hlt");
             }
-
             asm volatile("cli");
+            break; }
+        case 4:
+            // ebx bytes =edi pointer
+            result.edi = malloc(ebx, page_present | page_writable | user_page | progalloc_pagetble, page_present | page_writable | user_page | progalloc_pagedir);
+            break;
+        case 5:
+            free(edi);
             break;
         case 0x82:
             // ebx = microseconds
             asm volatile ("sti");
-            usleep(stack->ebx);
+            usleep(ebx);
             asm volatile ("cli");
             break;
-        case 10:
+        case 10: {
             // edi filebuffer =eax filenum    ebx root, esi name
-            read_sector_part(atufsinfo.file0+stack->ebx, (uint16_t*)&filebuffer2, 1);
-            size = read_filedata(&filebuffer2, (uint8_t*)buffer2);
-            stack->eax = find_file(stack->esi, (uint8_t*)buffer2, size, stack->edi);
-            break;
-        case 11:
+            uint64_t size;
+            struct file* rootbuffer = malloc(sizeof(struct file), page_present | page_writable, page_present | page_writable);
+            read_sector_part(atufsinfo.file0+ebx, (uint16_t*)&rootbuffer, 1);
+            uint16_t* buffer = malloc(rootbuffer->size_low, page_present | page_writable, page_present | page_writable);
+            size = read_filedata(rootbuffer, (uint8_t*)buffer);
+            result.eax = find_file(esi, (uint8_t*)buffer, size, edi);
+            free(rootbuffer);
+            free(buffer);
+            break; }
+        case 11: {
             // edi buffer =eax sizel =ebx sizeh     esi filebuffer
-            size = read_filedata((struct file*)stack->esi, stack->edi);
-            stack->eax = 0;
-            stack->ebx = 0;
-            stack->eax = (uint32_t)size;
-            stack->ebx = size >> 32 & 0xFFFF;
+            uint64_t size;
+            size = read_filedata((struct file*)esi, edi);
+            result.eax = 0;
+            result.ebx = 0;
+            result.eax = (uint32_t)size;
+            result.ebx = size >> 32 & 0xFFFF;
             break;
+        }
     }
-    return 0;
+    ktss.esp0 = stack_top;
+    ktss.ss0 = kerneldata_seg;
+    result.ret = 0;
+    return result;
+}
+struct syscallenteruserstack {
+    uint32_t ecx;
+    uint32_t edx;
+} __attribute__((packed));
+struct syscallenterstack {
+    uint32_t eax;
+    uint32_t ebx;
+
+    void* edi;
+    void* esi;
+    uint32_t ebp;
+
+    uint32_t ds;
+    uint32_t es;
+    uint32_t fs;
+    uint32_t gs;
+    
+    void* esp;
+    void* eip;
+
+} __attribute__((packed));
+uintptr_t syscall_enter(struct syscallenterstack* stack) {
+    struct syscallenteruserstack* u = stack->esp;
+    struct syscall_result a = syscall_c(stack->eax, stack->ebx, u->ecx, u->edx, stack->esi, stack->edi);
+    stack->eax = a.eax;
+    stack->ebx = a.ebx;
+    u->ecx = a.ecx;
+    u->edx = a.edx;
+
+    stack->esi = a.esi;
+    stack->edi = a.edi;
+    return a.ret;
+}
+
+struct syscallintstack {
+    uint32_t eax;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+
+    void* edi;
+    void* esi;
+    uint32_t ebp;
+
+    uint32_t ds;
+    uint32_t es;
+    uint32_t fs;
+    uint32_t gs;
+    
+    void* eip;
+    uint32_t cs;
+    uint32_t eflags;
+} __attribute__((packed));
+
+uintptr_t syscall_int(struct syscallintstack* stack) {
+    struct syscall_result a = syscall_c(stack->eax, stack->ebx, stack->ecx, stack->edx, stack->esi, stack->edi);
+    stack->eax = a.eax;
+    stack->ebx = a.ebx;
+    stack->ecx = a.ecx;
+    stack->edx = a.edx;
+
+    stack->esi = a.esi;
+    stack->edi = a.edi;
+    return a.ret;
 }

@@ -1,6 +1,6 @@
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
-#include <stdint.h>
+#include "lib/main.h"
 typedef struct {
     uint8_t scancode;
     uint8_t asciicode;

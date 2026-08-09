@@ -1,7 +1,6 @@
 #ifndef STRING_H
 #define STRING_H
-#include "lib/bool.h"
-#include <stdint.h>
+#include "lib/main.h"
 static inline int cmpstr(const char* a, const char* b) {
     while (*a && *b) {
         if (*a != *b)

@@ -39,8 +39,9 @@ struct file {
     uint16_t user_id;
     uint8_t attributes;
     uint8_t future;
+    uint16_t padding;
     union {
-        uint8_t data[490];
+        uint8_t data[488];
         struct extent extents[61];
     } __attribute__((packed));
 } __attribute__((packed));
@@ -149,7 +150,7 @@ struct extent alocate_clusters(uint32_t amount) {
 void write_file(struct file* f, uint32_t filenum, uint8_t *buffer, uint64_t buffer_size, nixt time) {
     struct file copy = *f;
     uint64_t oldfilesize_inby = ((uint64_t) f->size_high << 32) | f->size_low;
-    if (buffer_size <= 490) {
+    if (buffer_size <= 488) {
         if (copy.attributes & 0x80) {
             for (int i = 0; i < 61;i++) {
                 struct extent e = copy.extents[i];
@@ -157,11 +158,11 @@ void write_file(struct file* f, uint32_t filenum, uint8_t *buffer, uint64_t buff
             }
         }
         copy.attributes &= 0x7F;
-        memset(copy.data, 0, 490);
+        memset(copy.data, 0, 488);
         memcpy(copy.data, buffer, (uint32_t)buffer_size);
     } else {
         if (!(copy.attributes & 0x80)) {
-            memset(copy.data, 0, 490);
+            memset(copy.data, 0, 488);
         }
         copy.attributes |= 0x80;
         uint32_t nfilesize_inclus = (uint32_t)((buffer_size+511) >> 9);
@@ -266,7 +267,8 @@ void create_entry(uint32_t file, uint32_t root, uint8_t* name, uint8_t type, uin
                 continue;
             }
             if (fentry->entry_size == 0) {
-                fentry->entry_size = name_size+8;
+                fentry->entry_size = ((name_size+7) >> 3) << 3;
+                fentry->entry_size += 8;
                 finalsize += fentry->entry_size;
             }
             fentry->namesize = name_size;
@@ -356,7 +358,7 @@ void delete_file(uint32_t filen) {
 
     read_sector_part(atufsinfo.file0+filen, atufsbuffer1, 1);
     struct file* file = (struct file*)atufsbuffer1;
-    if (file->size_high || file->size_low > 490) {
+    if (file->size_high || file->size_low > 488) {
         for (int i = 0; i < 61;i++) {
             struct extent e = file->extents[i];
             if (!(e.manyclusters)) {break;}
@@ -379,7 +381,7 @@ uint32_t create_file(uint8_t* buffer, uint64_t buffer_size, nixt time, uint16_t 
     file.creation = time;
     file.last_access = time;
     file.last_mod = time;
-    if (buffer_size > 490)
+    if (buffer_size > 488)
         attr |= 0x80;
     else
         attr &= ~0x80;

@@ -1,37 +1,51 @@
-ENTRY(_start)
+ENTRY(_init)
 
-SECTIONS {
-    . = 0x100000;
-    .multiboot : {
-        *(.multiboot)
+KERNEL_VIRT = 0xC0000000;
+KERNEL_PHYS = 0x00100000;
+
+SECTIONS
+{
+    /* Bootstrap */
+    . = KERNEL_PHYS;
+
+    .kinit ALIGN(4K) :
+    {
+        start_kinit = .;
+        *(.kinit)
+        end_kinit = .;
     }
 
-    .text : ALIGN(4K) {
-        text_start = .;
+    /* Salta para o endereço virtual */
+    . += KERNEL_VIRT - KERNEL_PHYS;
+
+    .text ALIGN(4K) : AT(ADDR(.text) - KERNEL_VIRT + KERNEL_PHYS)
+    {
         *(.text)
-        text_end = .;
     }
 
-    .rodata : ALIGN(4K) {
-        *(.rodata)
+    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VIRT + KERNEL_PHYS)
+    {
+        *(.rodata*)
     }
 
-    
-    .data : ALIGN(4K) { 
-        data_start = .;
+    .data ALIGN(4K) : AT(ADDR(.data) - KERNEL_VIRT + KERNEL_PHYS)
+    {
         *(.data)
-        data_end = .;
     }
 
-    .bss : ALIGN(4K) {
+    .bss ALIGN(4K) (NOLOAD) :
+    {
         bss_start = .;
         *(.bss)
         *(COMMON)
         bss_end = .;
     }
 
-    .stack (NOLOAD) : {
-        . = . + 0x4000;
+    .stack ALIGN(4K) (NOLOAD) :
+    {
+        . += 0x4000;
         stack_top = .;
     }
+
+    ldheap_start = .;
 }

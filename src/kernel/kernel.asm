@@ -1,21 +1,21 @@
 [bits 32]
 
-section .multiboot
-align 4
-    dd 0x1BADB002
-    dd 0x0
-    dd -(0x1BADB002)
+; section .multiboot
+; align 4
+;     dd 0x1BADB002
+;     dd 0x0
+;     dd -(0x1BADB002)
 
 section .text
 global _start
-global set_gdt
 extern kernel
 extern clear_bss
 extern int_handler
 extern irq_handler
 extern stack_top
 extern binfo
-extern syscall_c
+extern syscall_enter
+extern syscall_int
 global int0
 global irq0
 global irq1
@@ -23,40 +23,39 @@ global irq5
 global irq12
 global irqmaslabel
 global irqslavelabel
-global set_idt
 global intlabel
-global syscallasm
-_start:
-    cli
-    cld
-    mov esp, stack_top
-    mov [binfo], esi
-    call clear_bss
-    call kernel
-    .hlt: 
-        hlt
-        jmp .hlt
-
-set_gdt:
+global syscallint
+global set_pag
+global errlabel
+global jmp_prog
+extern retstart   
+set_pag:
     mov eax, [esp+4]
-    lgdt [eax] ; OMG gdt loaded lol
-    mov ax, 0x10
+    mov cr3, eax
+ret
+
+jmp_prog:
+    mov ebx, [esp+4]
+    mov ecx, [esp+8]
+    ; set data seg
+    mov ax, 0x23 ; userdata seg | rpl = 3
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
-    mov ss, ax
+    ; after this, PLEASE DON'T USE POINTERS OR THINGS THAT USES RAM
+    push 0x23 ; userdata seg | rpl = 3 AGAIN
+    push ecx ; prog stack :)
 
-    jmp far 0x08:.end
-.end:
-    ret
+    pushf ; flags
+    pop eax ; get flags
+    or eax, 0x200 ; enable int
+    push eax ; flags again
 
-set_idt:
-    mov eax, [esp+4]
-    lidt [eax] ; OMG idt loaded lol
-    sti ; olá interrupções!!!!! (sem bios.........)
-    ret
-
+    push 0x1B ; usercode seg | rpl = 3
+    push ebx
+    
+    iretd
 
 ; interrupts
 int0:
@@ -134,7 +133,41 @@ irqslavelabel:
 iretd
 intlabel:
 iretd
-syscallasm:
+syscallenter:
+    push edx ; eip
+    push ecx ; esp
+    push gs
+    push fs
+    push es
+    push ds
+    push ebp
+    push esi
+    push edi
+    push ebx
+    push eax
+    push esp ; stack pointer
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    call syscall_enter
+    add esp, 4
+    mov [esp], eax
+    pop eax
+    pop ebx
+    pop edi
+    pop esi
+    pop ebp
+    pop ds
+    pop es
+    pop fs
+    pop gs
+    pop ecx ; esp
+    pop edx ; eip
+sysexit
+
+syscallint:
     push gs
     push fs
     push es
@@ -152,7 +185,7 @@ syscallasm:
     mov es, ax
     mov fs, ax
     mov gs, ax
-    call syscall_c
+    call syscall_int
     add esp, 4
     mov [esp], eax
     pop eax
@@ -167,3 +200,6 @@ syscallasm:
     pop fs
     pop gs
 iretd
+errlabel:
+cli
+hlt

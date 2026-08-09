@@ -94,4 +94,3 @@ start32:
     mov esi, 0x5000
     jmp eax
     hlt
-

@@ -1,7 +1,6 @@
 #ifndef ELF_H
 #define ELF_H
-#include <stdint.h>
-#include "lib/bool.h"
+#include "lib/main.h"
 struct elf_header {
     uint8_t magic;
     uint8_t elf_ascii[3];
@@ -38,5 +37,4 @@ struct ph_entry {
 
 bool is_elf(uint8_t* buffer);
 bool is_compatible(uint8_t* buffer);
-uintptr_t load_elf(uint8_t* buffer);
 #endif

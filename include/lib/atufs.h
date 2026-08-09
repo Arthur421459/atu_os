@@ -1,6 +1,6 @@
 #ifndef ATUFS_H
 #define ATUFS_H
-#include <stdint.h>
+#include "lib/main.h"
 #include "drivers/cmos.h"
 struct atufs_info {
     uint16_t jmpormagic;
@@ -36,8 +36,9 @@ struct file {
     uint16_t user_id;
     uint8_t attributes;
     uint8_t future;
+    uint16_t padding;
     union {
-        uint8_t data[490];
+        uint8_t data[488];
         struct extent extents[61];
     } __attribute__((packed));
 } __attribute__((packed));
