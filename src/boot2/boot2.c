@@ -107,7 +107,7 @@ uintptr_t boot2main() {
     bootinfo->smaps = (struct smap*)0x500;
     bootinfo->total_smaps = total_smaps;
     if (!kernel_offset) {
-        asm volatile ("int $0");
+        asm volatile ("hlt" :: "S"(readbuffer1));
     }
     memset((void*)0x500000, 0, 1 << 20);
     return kernel_offset;

@@ -192,12 +192,13 @@ tuple load_program(uint8_t* programptr) {
     return prog;
 }
 
-
+struct file* file0;
 void kernel() {
     worldtime = convert_to_nixt(get_cmos_time());
     tvideo = phys_to_virt(0xb8, 1, page_present | page_writable);
     clear();
-    print_wpos("Bem-vindo(a) ao AtuOS! :D", 0x07, 0);
+    file0 = malloc(sizeof(struct file), page_present | page_writable, page_present | page_writable);
+    read_sector_part(atufsinfo.file0, (uint16_t*)file0, 1);
     while(1);
 }
 
