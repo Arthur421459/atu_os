@@ -14,7 +14,7 @@
 #define progalloc_pagedir  (5 << 8)
 #define progstack_pagedir  (6 << 8)
 #define multiple_pagedir   (7 << 8)
-#define full_pagedir       (1 << 11)
+#define full_pagedir       (1 << 6)
 #define osattr_maskdir     (15 << 8)
 
 #define kernel_pagetble    (2 << 9)

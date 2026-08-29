@@ -193,12 +193,25 @@ tuple load_program(uint8_t* programptr) {
 }
 
 struct file* file0;
+uint8_t* file0data;
+uintptr_t file0size;
 void kernel() {
     worldtime = convert_to_nixt(get_cmos_time());
     tvideo = phys_to_virt(0xb8, 1, page_present | page_writable);
     clear();
 
-    print_wpos("Bem-vindo(a) ao AtuOS! :D", 0x07, 0);
+    file0 = malloc(512, page_present | page_writable, page_present | page_writable);
+    read_sector_part(atufsinfo.file0, (uint16_t*)file0, 1);
+    file0data = malloc(file0->size_low, page_present | page_writable, page_present | page_writable);
+    file0size = read_filedata(file0, file0data);
+
+    struct file* cmdfile = malloc(512, page_present | page_writable, page_present | page_writable);
+    find_file("test", file0data, file0size, cmdfile);
+
+    uint8_t* cmddata = malloc(cmdfile->size_low, page_present | page_writable, page_present | page_writable);
+    read_filedata(cmdfile, cmddata);
+    free(cmdfile);
+    print_wpos("Hello! :DDD", 0x07, 0);
     while(1);
 }
 

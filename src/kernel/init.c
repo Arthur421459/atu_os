@@ -3,7 +3,6 @@
 #include "kernel/msr.h"
 #include "lib/main.h"
 #include "kernel/bootinfo.h"
-#include "lib/string.h"
 #define no_cache           (1 << 4)
 #define pwt_enable         (1 << 3)
 #define user_page          (1 << 2)
@@ -17,7 +16,7 @@
 #define progalloc_pagedir  (5 << 8)
 #define progstack_pagedir  (6 << 8)
 #define multiple_pagedir   (7 << 8)
-#define full_pagedir       (1 << 11)
+#define full_pagedir       (1 << 6)
 #define osattr_maskdir     (15 << 8)
 
 #define kernel_pagetble    (2 << 9)
@@ -46,6 +45,7 @@ uint32_t traminbytes;
 uint32_t uraminbytes;
 uint32_t traminpages;
 uint32_t heap_size;
+uint32_t heap_sizebits;
 uint8_t* heap_start;
 uint32_t kernel_size;
 uint32_t kernel_sizepg;
@@ -83,10 +83,10 @@ void config_paging() {
     // map page table
     initmap_page(kernelpgtble, page_present | page_writable | kernel_pagetble | global_page, kernel_sizepg, 0x100);
     for (int i = 0; i < 131072; i++) {
-        directmap[i] = page_writable | sysmisc_pagetble | global_page; // set basic directmap
+        directmap[i] = page_writable | sysmisc_pagetble; // set basic directmap
     }
     uintptr_t pagedir_phys = (uintptr_t)&page_directory - physvirtdiff;
-    initmap_page(d0pgtable,   page_present | page_writable | sysmisc_pagetble, 1, pagedir_phys >> 12);
+    initmap_page(d0pgtable, page_present | page_writable | sysmisc_pagetble, 1, pagedir_phys >> 12);
     asm volatile ("movl %0, %%cr3" :: "r"(pagedir_phys) : "memory");
     // secure paging!
 }
@@ -115,7 +115,7 @@ void set_sysenter() {
 
     // sysenter :D
     wrmsr(IA32_SYSENTER_CS, kernelcode_seg);
-    wrmsr(IA32_SYSENTER_EIP, (uint64_t)&syscall_enter);
+    wrmsr(IA32_SYSENTER_EIP, (uint64_t)((uint32_t)&syscall_enter));
     wrmsr(IA32_SYSENTER_ESP, stack_top);
 
 }
@@ -130,11 +130,13 @@ void afterpaging() {
     free_directmap(ptr1, 1);
     remap_pic(0x20, 0x28);
     config_idt();
-    ptr1 = phys_to_virt((uintptr_t)vbinfo->smaps, (vbinfo->total_smaps + 99) / 100, page_present | page_writable);
-    init_heap(ptr1, vbinfo->total_smaps);
+    uintptr_t physsmaps = (uintptr_t)vbinfo->smaps;
+    ptr1 = phys_to_virt(physsmaps >> 12, (vbinfo->total_smaps + 99) / 100, page_present | page_writable);
+    init_heap(ptr1+(physsmaps & 4095), vbinfo->total_smaps);
     free_directmap(ptr1, (vbinfo->total_smaps + 99) / 100);
     set_pit_freq(100);
     init_atufs();
+    free_directmap(vbinfo, 1);
     if (has_msr()) {
         msr_init();
     }

@@ -40,7 +40,7 @@ static inline void memcpy(void *restrict dest, const void *restrict src, uintptr
 static inline void memset(void *s, int c, uintptr_t n) {
     char *p = (char*)s;
     for (uintptr_t i = 0;i < n;i++) {
-        p[i] = (unsigned char)c;
+        p[i] = (char)c;
     }
 }
 static inline void num_to_str(uintptr_t num, char* str) {

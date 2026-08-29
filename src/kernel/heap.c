@@ -5,10 +5,11 @@
 #include "kernel/paging.h"
 
 
+
 extern char ldheap_start[];
 extern uint8_t* heap_start;
 extern uint32_t heap_size;
-
+extern uint32_t kernel_sizepg;
 void mark_used(uint32_t first_page, uint32_t total) {
     for (uint32_t i = first_page; i < (first_page+total) && i < traminpages;i++) {
         uint32_t byte = i >> 3;
@@ -27,7 +28,6 @@ uintptr_t ppalloc(uint32_t pages) {
     uint32_t pagenum = bmp_alloc(heap_start, pages, heap_size);
     if (pagenum == 0) return 0;
     mark_used(pagenum, pages);
-    pagenum += 0x100;
     
     return pagenum;
 }
@@ -36,7 +36,6 @@ tuple we_ppalloc(uint32_t pages) {
     result = webmp_alloc(heap_start, pages, heap_size);
     if (result.b == 0) return result;
     mark_used(result.a, pages);
-    result.a += 0x100;
     
     return result;
 }
@@ -47,13 +46,13 @@ void init_heap(struct smap* smaps, int total_smaps) {
     for (int i = 0; i < total_smaps;i++) {
         if (smaps[i].base_addr < 0x100000) continue;
         if (smaps[i].type == 1) {
-            mark_free((smaps[i].base_addr - 0x100000) >> 12,
+            mark_free(smaps[i].base_addr >> 12,
             (smaps[i].length + 4095) >> 12);
         }
     }
+    mark_used(0,0x100);
     kernel_reserved_end = (uintptr_t)heap_start + heap_size;
-
-    mark_used(0,(kernel_reserved_end - 0x100000 + 4095) >> 12);
+    mark_used(0x100,kernel_sizepg);
 }
 
 void *malloc(size_t bytes, uint16_t tflags, uint16_t dflags) {
@@ -112,5 +111,5 @@ void free(void* ptr) {
     uint32_t pgnum = (uint32_t)cptr >> 12;
     struct malloc_header* header = (struct malloc_header*)(cptr-sizeof(struct malloc_header));
     memset(header, 0, header->total_bytes);
-    unmap_page((void*)0xD0100000, pgnum, header->total_pages);
+    unmap_page((void*)0xD0000000, pgnum, header->total_pages);
 }
