@@ -90,7 +90,6 @@ start32:
     mov ss, ax
     mov esp, 0x90000
     call boot2main
-    mov ebx, vbe_info
     mov esi, 0x5000
     xor edx, edx
     mov dl, byte [drive]
