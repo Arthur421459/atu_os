@@ -124,17 +124,24 @@ void msr_init() {
 }
 void afterpaging() {
     config_gdt();
+
     vbinfo = phys_to_virt((uintptr_t)binfo >> 12, 1, page_present | page_writable);
+    vbinfo = (void*)((uintptr_t)vbinfo+((uintptr_t)binfo & 4095));
+
     void* ptr1 = phys_to_virt((uintptr_t)vbinfo->partaddr >> 12, 1, page_present | page_writable);
+    ptr1 = (void*)((uintptr_t)ptr1+((uintptr_t)vbinfo->partaddr & 4095));
     set_partstart(ptr1);
     free_directmap(ptr1, 1);
+
     remap_pic(0x20, 0x28);
     config_idt();
+    set_pit_freq(100);
+    
     uintptr_t physsmaps = (uintptr_t)vbinfo->smaps;
     ptr1 = phys_to_virt(physsmaps >> 12, (vbinfo->total_smaps + 99) / 100, page_present | page_writable);
     init_heap(ptr1+(physsmaps & 4095), vbinfo->total_smaps);
     free_directmap(ptr1, (vbinfo->total_smaps + 99) / 100);
-    set_pit_freq(100);
+
     init_atufs();
     free_directmap(vbinfo, 1);
     if (has_msr()) {
