@@ -35,8 +35,11 @@ set_pag:
 ret
 
 jmp_prog:
+    cli
     mov ebx, [esp+4]
     mov ecx, [esp+8]
+    mov eax, [esp+12]
+    mov cr3, eax
     ; set data seg
     mov ax, 0x23 ; userdata seg | rpl = 3
     mov ds, ax
@@ -48,13 +51,16 @@ jmp_prog:
     push ecx ; prog stack :)
 
     pushf ; flags
-    pop eax ; get flags
-    or eax, 0x200 ; enable int
-    push eax ; flags again
+    ; pop eax ; get flags
+    ; or eax, 0x200 ; enable int
+    ; push eax ; flags again
 
     push 0x1B ; usercode seg | rpl = 3
     push ebx
-    
+    xor eax, eax
+    mov ebx, eax
+    mov ecx, eax
+
     iretd
 
 ; interrupts

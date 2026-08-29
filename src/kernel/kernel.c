@@ -22,7 +22,7 @@ int cursorc = 0;
 
 // asm functions
 extern void set_pag(uintptr_t addr);
-extern void jmp_prog(uintptr_t eip, uintptr_t esp);
+extern void jmp_prog(uintptr_t eip, uintptr_t esp, uintptr_t cr3) __attribute__((noreturn));
 
 void set_cursor_pos(uint16_t pos) {
     outb(0x3d4, 0x0F); // set reg
@@ -159,16 +159,20 @@ struct irqotherstack {
 } __attribute__((packed));
 
 void add_page_essential(uint32_t* ptr, uint32_t physptrpage) {
-    memcpy(ptr, page_directory, 1024); // get the base
+    memcpy(ptr, page_directory, 4096); // get the base
     ptr[832] = 0;
     map_page(ptr, physptrpage, 0xD0000, 1, page_present | page_writable | sysmisc_pagedir,
     page_present | page_writable | sysmisc_pagetble | full_pagedir);
 }
 
 
-
-tuple load_program(uint8_t* programptr) {
-    tuple prog = {0};
+struct load_program_result {
+    uint32_t pentry;
+    uint32_t pagediraddr;
+    uint32_t stackaddr;
+};
+struct load_program_result load_program(uint8_t* programptr) {
+    struct load_program_result prog = {0};
     if (!is_compatible(programptr)) return prog;
     uint32_t pagedirpage = ppalloc(1);
     uint32_t* pagediraddr = phys_to_virt(pagedirpage, 1, sysmisc_pagetble | page_present);
@@ -186,9 +190,12 @@ tuple load_program(uint8_t* programptr) {
         page_present | page_writable | user_page | prog_pagetble, 
         page_present | page_writable | user_page | prog_pagedir);
     }
-    prog.a = elfh->pentry_ofs;
-    prog.b = pagedirpage << 12;
-
+    uint32_t progstackpage = ppalloc(8);
+    map_page(pagediraddr, progstackpage, 0xB0000, 8, page_present | page_writable | progstack_pagetble | user_page, page_present | page_writable | progstack_pagedir | user_page);
+    prog.pentry = elfh->pentry_ofs;
+    prog.pagediraddr = pagedirpage << 12;
+    prog.stackaddr = 0xB0008000;
+    free_directmap(pagediraddr, 1);
     return prog;
 }
 
@@ -212,6 +219,8 @@ void kernel() {
     read_filedata(cmdfile, cmddata);
     free(cmdfile);
     print_wpos("Hello! :DDD", 0x07, 0);
+    struct load_program_result loadedcmd = load_program(cmddata);
+    jmp_prog(loadedcmd.pentry, loadedcmd.stackaddr, loadedcmd.pagediraddr);
     while(1);
 }
 
@@ -230,6 +239,12 @@ struct syscall_result {
 
 struct syscall_result syscall_c(uint32_t eax, uint32_t ebx, uint32_t ecx, uint32_t edx, void* esi, void* edi) {
     struct syscall_result result;
+    result.eax = eax;
+    result.ebx = ebx;
+    result.ecx = ecx;
+    result.edx = edx;
+    result.esi = esi;
+    result.edi = edi;
     switch (eax) {
         case 0:
             while(1);

@@ -5,7 +5,7 @@ KERNEL_PHYS = 0x00100000;
 
 SECTIONS
 {
-    /* Bootstrap */
+    /*Kernel init*/
     . = KERNEL_PHYS;
 
     .kinit ALIGN(4K) :
@@ -15,7 +15,7 @@ SECTIONS
         end_kinit = .;
     }
 
-    /* Salta para o endereço virtual */
+    /*Higher half*/
     . += KERNEL_VIRT - KERNEL_PHYS;
 
     .text ALIGN(4K) : AT(ADDR(.text) - KERNEL_VIRT + KERNEL_PHYS)

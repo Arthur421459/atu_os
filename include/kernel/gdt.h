@@ -7,6 +7,7 @@
 #define usercode_seg 0x18
 #define userdata_seg 0x20
 
+#define tss_seg      0x28
 extern void set_gdt(uintptr_t gp_ptr);
 extern void set_tss();
 
