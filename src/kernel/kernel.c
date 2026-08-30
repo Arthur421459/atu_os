@@ -194,7 +194,7 @@ struct load_program_result load_program(uint8_t* programptr) {
     map_page(pagediraddr, progstackpage, 0xB0000, 8, page_present | page_writable | progstack_pagetble | user_page, page_present | page_writable | progstack_pagedir | user_page);
     prog.pentry = elfh->pentry_ofs;
     prog.pagediraddr = pagedirpage << 12;
-    prog.stackaddr = 0xB0008000;
+    prog.stackaddr = 0xB0007ffc;
     free_directmap(pagediraddr, 1);
     return prog;
 }
@@ -304,8 +304,6 @@ struct syscall_result syscall_c(uint32_t eax, uint32_t ebx, uint32_t ecx, uint32
             break;
         }
     }
-    ktss.esp0 = stack_top;
-    ktss.ss0 = kerneldata_seg;
     result.ret = 0;
     return result;
 }
@@ -340,6 +338,9 @@ uintptr_t syscall_enter(struct syscallenterstack* stack) {
 
     stack->esi = a.esi;
     stack->edi = a.edi;
+
+    ktss.esp0 = stack_top;
+    ktss.ss0 = kerneldata_seg;
     return a.ret;
 }
 
@@ -364,6 +365,8 @@ struct syscallintstack {
 } __attribute__((packed));
 
 uintptr_t syscall_int(struct syscallintstack* stack) {
+    ktss.esp0 = stack_top;
+    ktss.ss0 = kerneldata_seg;
     struct syscall_result a = syscall_c(stack->eax, stack->ebx, stack->ecx, stack->edx, stack->esi, stack->edi);
     stack->eax = a.eax;
     stack->ebx = a.ebx;
@@ -372,5 +375,8 @@ uintptr_t syscall_int(struct syscallintstack* stack) {
 
     stack->esi = a.esi;
     stack->edi = a.edi;
+
+    ktss.esp0 = stack_top;
+    ktss.ss0 = kerneldata_seg;
     return a.ret;
 }

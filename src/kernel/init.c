@@ -50,6 +50,8 @@ uint8_t* heap_start;
 uint32_t kernel_size;
 uint32_t kernel_sizepg;
 struct boot_info* binfo;
+extern char stack_topld[];
+uint32_t stack_top;
 void calculateram() {
     for (int i = 0; i < binfo->total_smaps;i++) {
         traminbytes += binfo->smaps[i].length;
@@ -90,12 +92,15 @@ void config_paging() {
     asm volatile ("movl %0, %%cr3" :: "r"(pagedir_phys) : "memory");
     // secure paging!
 }
+uintptr_t binfoaddr;
 void afterkinit(void* bbinfo) {
+    binfoaddr = (uintptr_t)bbinfo;
     binfo = (struct boot_info*)bbinfo;
     calculateram();
     init_heap_pt1();
     config_paging();
     clear_bss();
+    stack_top = (uintptr_t)stack_topld;
     // first part is done!
 }
 // now that kernel is totally mapped, you can init another things :)
@@ -107,7 +112,7 @@ void afterkinit(void* bbinfo) {
 #include "kernel/paging.h"
 struct boot_info* vbinfo;
 extern void syscall_enter();
-extern uint32_t stack_top;
+
 void set_sysenter() {
     // detect sysenter
     struct cpuid_result a = cpuid(1, 0);
@@ -124,13 +129,11 @@ void msr_init() {
 }
 void afterpaging() {
     config_gdt();
+    vbinfo = phys_to_virt(binfoaddr >> 12, 1, page_present | page_writable);
+    vbinfo = (void*)((uintptr_t)vbinfo+(binfoaddr & 4095));
 
-    vbinfo = phys_to_virt((uintptr_t)binfo >> 12, 1, page_present | page_writable);
-    vbinfo = (void*)((uintptr_t)vbinfo+((uintptr_t)binfo & 4095));
-
-    void* ptr1 = phys_to_virt((uintptr_t)vbinfo->partaddr >> 12, 1, page_present | page_writable);
-    ptr1 = (void*)((uintptr_t)ptr1+((uintptr_t)vbinfo->partaddr & 4095));
-    set_partstart(ptr1);
+    uint8_t* ptr1 = phys_to_virt((uintptr_t)vbinfo->partaddr >> 12, 1, page_present | page_writable); // isso muda heap_size não sei por que
+    set_partstart(ptr1+((uintptr_t)vbinfo->partaddr & 4095));
     free_directmap(ptr1, 1);
 
     remap_pic(0x20, 0x28);
@@ -139,11 +142,10 @@ void afterpaging() {
     
     uintptr_t physsmaps = (uintptr_t)vbinfo->smaps;
     ptr1 = phys_to_virt(physsmaps >> 12, (vbinfo->total_smaps + 99) / 100, page_present | page_writable);
-    init_heap(ptr1+(physsmaps & 4095), vbinfo->total_smaps);
+    init_heap((struct smap*)(ptr1+(physsmaps & 4095)), vbinfo->total_smaps);
     free_directmap(ptr1, (vbinfo->total_smaps + 99) / 100);
 
     init_atufs();
-    free_directmap(vbinfo, 1);
     if (has_msr()) {
         msr_init();
     }

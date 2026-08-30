@@ -18,6 +18,8 @@ void main(int argc, char **argv) {
         usleep(500);
     }
 }*/
+#include "atuos/core.h"
 void main() {
+    print_wpos("abcd", 80);
     while (1);
 }

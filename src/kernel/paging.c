@@ -41,6 +41,7 @@ void *phys_to_virt(uint32_t physpage, uint32_t pages, uint16_t flags) {
         directmapentries[i] = (physpage+i) << 12 | flags;
         invlpg((void*)(0xE0000000+((ofs+i) << 12)));
     }
+
     return (void*)(0xE0000000+(ofs << 12));
 }
 void free_directmap(void *ptr, uint32_t pages) {

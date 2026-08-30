@@ -51,9 +51,9 @@ jmp_prog:
     push ecx ; prog stack :)
 
     pushf ; flags
-    ; pop eax ; get flags
-    ; or eax, 0x200 ; enable int
-    ; push eax ; flags again
+    pop eax ; get flags
+    or eax, 0x200 ; enable int
+    push eax ; flags again
 
     push 0x1B ; usercode seg | rpl = 3
     push ebx
@@ -207,5 +207,6 @@ syscallint:
     pop gs
 iretd
 errlabel:
+mov eax, 0xfab
 cli
 hlt

@@ -9,6 +9,7 @@
 extern char ldheap_start[];
 extern uint8_t* heap_start;
 extern uint32_t heap_size;
+extern uint32_t kernel_size;
 extern uint32_t kernel_sizepg;
 void mark_used(uint32_t first_page, uint32_t total) {
     for (uint32_t i = first_page; i < (first_page+total) && i < traminpages;i++) {
@@ -42,6 +43,7 @@ tuple we_ppalloc(uint32_t pages) {
 uintptr_t kernel_reserved_end;
 
 void init_heap(struct smap* smaps, int total_smaps) {
+
     memset(heap_start, 0xFF, heap_size);
     for (int i = 0; i < total_smaps;i++) {
         if (smaps[i].base_addr < 0x100000) continue;

@@ -11,7 +11,7 @@ void set_interrupt_idt(int i, uint32_t offset, uint8_t attributes, uint16_t sele
     idt[i].reserved_zero = 0; // nunca se sabe ne?
 }
 void config_idt() {
-    itr.base = (uintptr_t)&idt;
+    itr.base = (uintptr_t)idt;
     itr.limit = sizeof(idt) - 1;
     for (int i = 0; i < 256; i++) {
         switch (i) {
@@ -31,7 +31,7 @@ void config_idt() {
                 set_interrupt_idt(i, (uintptr_t)&irq12, 0b10001110, 0x08);
                 break;
             case 0xA7:
-                set_interrupt_idt(i, (uintptr_t)&syscallint, 0b11101110, 0x08);
+                set_interrupt_idt(i, (uintptr_t)&syscallint, 0b11101111, 0x08);
                 break;
             default:
                 if (i >= 0x20 && i < 0x28) {
