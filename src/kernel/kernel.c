@@ -218,7 +218,6 @@ void kernel() {
     uint8_t* cmddata = malloc(cmdfile->size_low, page_present | page_writable, page_present | page_writable);
     read_filedata(cmdfile, cmddata);
     free(cmdfile);
-    print_wpos("Hello! :DDD", 0x07, 0);
     struct load_program_result loadedcmd = load_program(cmddata);
     jmp_prog(loadedcmd.pentry, loadedcmd.stackaddr, loadedcmd.pagediraddr);
     while(1);

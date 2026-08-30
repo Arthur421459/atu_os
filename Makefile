@@ -87,6 +87,8 @@ rootfs/%: $(BUILD_DIR)/c/apps/%.o build/libatu.a
 run: all
 	qemu-system-i386 -m 512M -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk
 
+hex: all # need imhex flatpak and file perm
+	flatpak run net.werwolv.ImHex hd.img
 triple: all
 	qemu-system-i386 -m 512M -audiodev pa,id=snd0 -device sb16,audiodev=snd0 -drive file=hd.img,format=raw,index=0,media=disk -d int -no-reboot -no-shutdown
 

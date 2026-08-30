@@ -254,26 +254,30 @@ uintptr_t find_file(const char* name, uint8_t* buffer, uint64_t buffer_size, str
     };
     return 0;
 }
+size_t a = 0;
+
 void create_entry(uint32_t file, uint32_t root, uint8_t* name, uint8_t type, uint8_t name_size) {
     struct file* rootfile = malloc(sizeof(struct file));
     read_sector_part(atufsinfo.file0+root, (uint16_t*)rootfile, 1);
     uint64_t rootdatasize = ((rootfile->size_low+8+name_size+511) >> 9) << 9;
     uint8_t* rootdata = malloc(rootdatasize);
+    memset(rootdata, 0, rootdatasize);
     uint64_t size = read_filedata(rootfile, rootdata);
-    if (size == 0) {
-        memset(rootdata, 0, 512);
-    }
     uint64_t finalsize = size;
     uint64_t offset = 0;
+    uint16_t required_size = ((name_size + 7) >> 3) << 3;
+    required_size += 8;
+
     while (offset < rootdatasize) {
+
         struct entry* fentry = (struct entry*)(rootdata+offset);
         if (fentry->atr == 0) {
+
             if (offset+fentry->entry_size > rootdatasize) {return;}
-            if (fentry->entry_size < name_size+8 && fentry->entry_size != 0) {
+            if (fentry->entry_size < required_size && fentry->entry_size != 0) {
                 offset += fentry->entry_size;
                 continue;
-            }
-            if (fentry->entry_size == 0) {
+            } else if (fentry->entry_size == 0) {
                 fentry->entry_size = ((name_size+7) >> 3) << 3;
                 fentry->entry_size += 8;
                 finalsize += fentry->entry_size;
@@ -315,6 +319,7 @@ void rename_entry(uint32_t root, const char* oldname, const char* newname, uint8
     read_sector_part(atufsinfo.file0+root, (uint16_t*)rootfile, 1);
     uint64_t rootdatasize = ((rootfile->size_low+1+511)/512)*512;
     uint8_t* rootdata = malloc(rootdatasize);
+    memset(rootdata, 0, rootdatasize);
     uint64_t size = read_filedata(rootfile, rootdata);
     uint64_t offset = 0;
     while (offset < rootfile->size_low) {
@@ -496,5 +501,6 @@ int main(int argc, char *argv[]) {
     create_entry(nfile, dir, (uint8_t*)token, 0x20, strlen(token));
 
     fclose(hd);
+
     return 0;
 }

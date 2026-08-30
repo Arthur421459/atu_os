@@ -19,7 +19,19 @@ void main(int argc, char **argv) {
     }
 }*/
 #include "atuos/core.h"
+#include "atuos/time.h"
 void main() {
-    print_wpos("abcd", 80);
+    sleep(1);
+    print_wpos("1 second", 0);
+    sleep(1);
+    print_wpos("2 seconds", 0);
+    sleep(1);
+    print_wpos("3 seconds", 0);
+    sleep(1);
+    print_wpos("4 seconds", 0);
+    sleep(1);
+    print_wpos("5 seconds", 0);
+    sleep(55);
+    print_wpos("1 minute ", 0);
     while (1);
 }

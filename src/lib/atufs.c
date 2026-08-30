@@ -191,6 +191,7 @@ void create_entry(uint32_t file, uint32_t root, uint8_t* name, uint8_t type, uin
     read_sector_part(atufsinfo.file0+root, (uint16_t*)rootfile, 1);
     uint64_t rootdatasize = ((rootfile->size_low+8+name_size+511) >> 9) << 9;
     uint8_t* rootdata = malloc(rootdatasize, page_present | page_writable, page_present | page_writable);
+    memset(rootdata, 0, rootdatasize);
     uint64_t size = read_filedata(rootfile, rootdata);
     if (size == 0) {
         memset(rootdata, 0, 512);
@@ -247,6 +248,7 @@ void rename_entry(uint32_t root, const char* oldname, const char* newname, uint8
     read_sector_part(atufsinfo.file0+root, (uint16_t*)rootfile, 1);
     uint64_t rootdatasize = ((rootfile->size_low+1+511)/512)*512;
     uint8_t* rootdata = malloc(rootdatasize, page_present | page_writable, page_present | page_writable);
+    memset(rootdata, 0, rootdatasize);
     uint64_t size = read_filedata(rootfile, rootdata);
     uint64_t offset = 0;
     while (offset < rootfile->size_low) {
