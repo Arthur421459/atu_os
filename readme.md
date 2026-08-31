@@ -3,7 +3,7 @@ Hello! This is a random 32 bit operating system that im making.
 
 For build this OS you need 
 
-gcc make nasm ld
+i686-elf-gcc i686-elf-ld i686-elf-ar make nasm
 
 And just use
 ```sh
