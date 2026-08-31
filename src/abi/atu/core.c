@@ -1,4 +1,4 @@
-#include "atuos/core.h"
+#include <atuos/core.h>
 
 void *malloc(size_t bytes) {
     void *pointer;

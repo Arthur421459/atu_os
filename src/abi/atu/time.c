@@ -1,4 +1,4 @@
-#include "atuos/time.h"
+#include <atuos/time.h>
 void sleep(uint32_t sec) {
     asm volatile ("int $0xA7" :: "a"(2), "b"(sec) : "memory", "cc");
 }

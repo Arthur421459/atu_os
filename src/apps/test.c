@@ -18,8 +18,8 @@ void main(int argc, char **argv) {
         usleep(500);
     }
 }*/
-#include "atuos/core.h"
-#include "atuos/time.h"
+#include <atuos/core.h>
+#include <atuos/time.h>
 void main() {
     sleep(1);
     print_wpos("1 second", 0);
@@ -32,6 +32,6 @@ void main() {
     sleep(1);
     print_wpos("5 seconds", 0);
     sleep(55);
-    print_wpos("1 minute ", 0);
+    print_wpos("1 minute\0", 0);
     while (1);
 }

@@ -215,7 +215,7 @@ void kernel() {
     struct file* cmdfile = malloc(512, page_present | page_writable, page_present | page_writable);
     find_file("test", file0data, file0size, cmdfile);
 
-    uint8_t* cmddata = malloc(cmdfile->size_low, page_present | page_writable, page_present | page_writable);
+    uint8_t* cmddata = malloc(((cmdfile->size_low +511) >> 9) << 9, page_present | page_writable, page_present | page_writable);
     read_filedata(cmdfile, cmddata);
     free(cmdfile);
     struct load_program_result loadedcmd = load_program(cmddata);

@@ -1,5 +1,5 @@
-#include "atuos/file.h"
-#include "lib/main.h"
+#include <atuos/file.h>
+
 uint32_t find_file(const char* name, uint32_t root, struct file* f) {
     uint32_t filenum = 0;
     asm volatile ("int $0xA7" : "=a"(filenum) : "a"(10), "b"(root), "S"(name), "D"(f) : "memory", "cc");

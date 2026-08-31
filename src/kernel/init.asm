@@ -71,7 +71,7 @@ extern kernel
 initdone:
     mov eax, esp
     add eax, offsetk
-    mov esp, eax
+    mov esp, eax ; set stack to higher half
 
     call afterkinit ; let c configure everything :)
     mov esp, stack_topld ; finally kernel stack!

@@ -7,7 +7,7 @@ extern partstart
 extern total_smaps
 global _start
 _start:
-    xor ax, ax
+    mov ax, cs
     mov ds, ax
     mov es, ax
     mov [partaddr], esi ; salvar o ponteiro
@@ -35,7 +35,7 @@ _start:
     jmp 0x08:start32
 
 getram:
-    pusha 
+    pusha
     xor ax, ax
     mov ds, ax
     mov es, ax
