@@ -222,9 +222,7 @@ void kernel() {
     jmp_prog(loadedcmd.pentry, loadedcmd.stackaddr, loadedcmd.pagediraddr);
     while(1);
 }
-
-
-
+uintptr_t syscall_support;
 
 struct syscall_result {
     uint32_t ret;
@@ -247,6 +245,7 @@ struct syscall_result syscall_c(uint32_t eax, uint32_t ebx, uint32_t ecx, uint32
     switch (eax) {
         case 0:
             while(1);
+            result.eax = syscall_support;
             break;
         case 1:
             // esi: pointer, ebx: pos
@@ -338,6 +337,8 @@ uintptr_t syscall_enter(struct syscallenterstack* stack) {
     stack->esi = a.esi;
     stack->edi = a.edi;
 
+    stack->esp += 8;
+    
     ktss.esp0 = stack_top;
     ktss.ss0 = kerneldata_seg;
     return a.ret;

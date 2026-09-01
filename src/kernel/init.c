@@ -112,7 +112,7 @@ void afterkinit(void* bbinfo) {
 #include "kernel/paging.h"
 struct boot_info* vbinfo;
 extern void syscall_enter();
-
+extern uintptr_t syscall_support;
 void set_sysenter() {
     // detect sysenter
     struct cpuid_result a = cpuid(1, 0);
@@ -122,7 +122,7 @@ void set_sysenter() {
     wrmsr(IA32_SYSENTER_CS, kernelcode_seg);
     wrmsr(IA32_SYSENTER_EIP, (uint64_t)((uint32_t)&syscall_enter));
     wrmsr(IA32_SYSENTER_ESP, stack_top);
-
+    syscall_support = 1;
 }
 void msr_init() {
     set_sysenter();
