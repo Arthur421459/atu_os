@@ -1,8 +1,6 @@
 #ifndef _STRING_H
 #define _STRING_H
-
-#define NULL 0
-typedef unsigned int size_t;
+#include <stddef.h>
 // need strcoll and strxfrm
 
 void *memset(void *dest, int value, size_t size);

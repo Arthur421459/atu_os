@@ -2,8 +2,8 @@
 #define CPUID_H
 #include "lib/main.h"
 // edx
-#define CPUID_FEATURE_MSR (2 << 5)
-#define CPUID_FEATURE_SYSENTER (2 << 11)
+#define CPUID_FEATURE_MSR (1 << 5)
+#define CPUID_FEATURE_SYSENTER (1 << 11)
 struct cpuid_result {
     uint32_t eax;
     uint32_t ebx;

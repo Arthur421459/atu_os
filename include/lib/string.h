@@ -65,4 +65,17 @@ static inline void num_to_str(uintptr_t num, char* str) {
         str[end] = temp;
     }
 }
+static inline void hex_to_str(uintptr_t hex, char* str) {
+    memset(str, '0', 9);
+    str[1] = 'x';
+    for (int i = 9; i > 1;i--) {
+        char a;
+        a = hex & 15; // 0b1111
+        a += '0';
+        if (a > '9') a += 7;
+        hex >>= 4;
+        str[i] = a;
+    }
+    str[10] = '\0';
+}
 #endif

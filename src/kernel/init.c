@@ -111,7 +111,7 @@ void afterkinit(void* bbinfo) {
 #include "lib/atufs.h"
 #include "kernel/paging.h"
 struct boot_info* vbinfo;
-extern void syscall_enter();
+extern void syscallenter();
 extern uintptr_t syscall_support;
 void set_sysenter() {
     // detect sysenter
@@ -120,7 +120,7 @@ void set_sysenter() {
 
     // sysenter :D
     wrmsr(IA32_SYSENTER_CS, kernelcode_seg);
-    wrmsr(IA32_SYSENTER_EIP, (uint64_t)((uint32_t)&syscall_enter));
+    wrmsr(IA32_SYSENTER_EIP, (uint64_t)((uint32_t)&syscallenter));
     wrmsr(IA32_SYSENTER_ESP, stack_top);
     syscall_support = 1;
 }

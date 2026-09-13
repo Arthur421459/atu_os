@@ -101,11 +101,19 @@ C_LIB_SRC = $(wildcard src/lib/*.c)
 
 C_APPS_SRC = $(wildcard src/apps/*.c)
 
+# ABI ATU
 C_ABI_ATU_SRC = $(wildcard src/abi/atu/*.c)
+ASM_ABI_ATU_SRC = $(wildcard src/abi/atu/*.asm)
+
+# ABIO: código da ABI que não faz parte da libatu.a
+C_ABIO_SRC = $(wildcard src/abio/*.c)
+ASM_ABIO_SRC = $(wildcard src/abio/*.asm)
+
+# STDC: biblioteca padrão C
+C_STDC_SRC = $(wildcard src/abi/stdc/*.c)
+ASM_STDC_SRC = $(wildcard src/abi/stdc/*.asm)
 
 C_TOOLS_SRC = $(wildcard src/tools/*.c)
-
-ASM_CRT_SRC = $(wildcard src/crtabi/*.asm)
 
 
 # ============================================================
@@ -120,7 +128,10 @@ OBJ_C = $(patsubst \
 	src/%.c,$(BUILD_DIR)/c/%.o,$(SRC_C))
 
 
+# ============================================================
 # Kernel
+# ============================================================
+
 OBJ_KERNEL_C = $(patsubst \
 	src/%.c,$(BUILD_DIR)/c/%.o,$(C_KERNEL_SRC))
 
@@ -128,7 +139,10 @@ OBJ_KERNEL_ASM = $(patsubst \
 	src/%.asm,$(BUILD_DIR)/asm/%.o,$(ASM_KERNEL_SRC))
 
 
+# ============================================================
 # Boot2
+# ============================================================
+
 OBJ_BOOT2_C = $(patsubst \
 	src/%.c,$(BUILD_DIR)/c/%.o,$(C_BOOT2_SRC))
 
@@ -136,7 +150,10 @@ OBJ_BOOT2_ASM = $(patsubst \
 	src/%.asm,$(BUILD_DIR)/asm/%.o,$(ASM_BOOT2_SRC))
 
 
+# ============================================================
 # Boot1
+# ============================================================
+
 OBJ_BOOT1_ASM = $(patsubst \
 	src/boot1/%.asm,$(BUILD_DIR)/%.bin,$(ASM_BOOT1_SRC))
 
@@ -145,18 +162,47 @@ OBJ_BOOT1_ASM = $(patsubst \
 # ABI ATU
 # ============================================================
 
-OBJ_ABI_ATU = $(patsubst \
-	src/abi/atu/%.c,$(BUILD_DIR)/abi/atu/%.o,$(C_ABI_ATU_SRC))
+OBJ_ABI_ATU = \
+	$(patsubst src/abi/atu/%.c,$(BUILD_DIR)/abi/atu/%.o,$(C_ABI_ATU_SRC)) \
+	$(patsubst src/abi/atu/%.asm,$(BUILD_DIR)/abi/atu/%.o,$(ASM_ABI_ATU_SRC))
 
 ABI_ATU_LIB = $(SYSROOT_LIB)/libatu.a
 
 
 # ============================================================
-# CRT
+# ABIO
+#
+# Código da ABI que não é colocado em libatu.a.
+#
+# Pode conter tanto C quanto Assembly.
+# Esses objetos são linkados diretamente nas aplicações.
 # ============================================================
 
-OBJ_CRT_ASM = $(patsubst \
-	src/%.asm,$(BUILD_DIR)/%.o,$(ASM_CRT_SRC))
+OBJ_ABIO_C = $(patsubst \
+	src/abio/%.c,$(BUILD_DIR)/abio/%.o,$(C_ABIO_SRC))
+
+OBJ_ABIO_ASM = $(patsubst \
+	src/abio/%.asm,$(BUILD_DIR)/abio/%.o,$(ASM_ABIO_SRC))
+
+OBJ_ABIO = \
+	$(OBJ_ABIO_C) \
+	$(OBJ_ABIO_ASM)
+
+
+# ============================================================
+# STDC
+#
+# Biblioteca padrão C.
+#
+# Pode conter tanto C quanto Assembly.
+# Tudo é empacotado em libstdc.a.
+# ============================================================
+
+OBJ_STDC = \
+	$(patsubst src/abi/stdc/%.c,$(BUILD_DIR)/abi/stdc/%.o,$(C_STDC_SRC)) \
+	$(patsubst src/abi/stdc/%.asm,$(BUILD_DIR)/abi/stdc/%.o,$(ASM_STDC_SRC))
+
+STDC_LIB = $(SYSROOT_LIB)/libstdc.a
 
 
 # ============================================================
@@ -225,12 +271,21 @@ $(BUILD_DIR)/asm/%.o: src/%.asm
 
 
 # ============================================================
-# ABI ATU - compilação
+# ABI ATU - compilação C
 # ============================================================
 
 $(BUILD_DIR)/abi/atu/%.o: src/abi/atu/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(APP_CFLAGS) -c $< -o $@
+
+
+# ============================================================
+# ABI ATU - compilação Assembly
+# ============================================================
+
+$(BUILD_DIR)/abi/atu/%.o: src/abi/atu/%.asm
+	@mkdir -p $(dir $@)
+	$(ASMC) $(ASMC_FLAGS) $< -o $@
 
 
 # ============================================================
@@ -266,12 +321,75 @@ $(SYSROOT_INC)/%: src/abi/atu/include/%
 
 
 # ============================================================
-# CRT
+# ABIO - compilação C
 # ============================================================
 
-$(BUILD_DIR)/crtabi/%.o: src/crtabi/%.asm
+$(BUILD_DIR)/abio/%.o: src/abio/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(APP_CFLAGS) -c $< -o $@
+
+
+# ============================================================
+# ABIO - compilação Assembly
+# ============================================================
+
+$(BUILD_DIR)/abio/%.o: src/abio/%.asm
 	@mkdir -p $(dir $@)
 	$(ASMC) $(ASMC_FLAGS) $< -o $@
+
+
+# ============================================================
+# STDC - compilação C
+# ============================================================
+
+$(BUILD_DIR)/abi/stdc/%.o: src/abi/stdc/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(APP_CFLAGS) -c $< -o $@
+
+
+# ============================================================
+# STDC - compilação Assembly
+# ============================================================
+
+$(BUILD_DIR)/abi/stdc/%.o: src/abi/stdc/%.asm
+	@mkdir -p $(dir $@)
+	$(ASMC) $(ASMC_FLAGS) $< -o $@
+
+
+# ============================================================
+# STDC - biblioteca
+# ============================================================
+
+$(STDC_LIB): $(OBJ_STDC)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+
+
+# ============================================================
+# Headers da STDC
+#
+# Estrutura esperada:
+#
+# src/abi/stdc/include/stdio.h
+# src/abi/stdc/include/stdlib.h
+# src/abi/stdc/include/string.h
+#
+# viram:
+#
+# sysroot/usr/include/stdio.h
+# sysroot/usr/include/stdlib.h
+# sysroot/usr/include/string.h
+# ============================================================
+
+STDC_HEADERS = $(shell find src/abi/stdc/include -type f 2>/dev/null)
+
+STDC_HEADER_TARGETS = $(patsubst \
+	src/abi/stdc/include/%,$(SYSROOT_INC)/%,$(STDC_HEADERS))
+
+
+$(SYSROOT_INC)/%: src/abi/stdc/include/%
+	@mkdir -p $(dir $@)
+	cp $< $@
 
 
 # ============================================================
@@ -330,17 +448,20 @@ $(BUILD_DIR)/%.bin: src/boot1/%.asm
 rootfs/%: \
 	$(BUILD_DIR)/c/apps/%.o \
 	$(ABI_ATU_LIB) \
-	$(OBJ_CRT_ASM) \
-	$(ABI_ATU_HEADER_TARGETS)
+	$(STDC_LIB) \
+	$(OBJ_ABIO) \
+	$(ABI_ATU_HEADER_TARGETS) \
+	$(STDC_HEADER_TARGETS)
 
 	@mkdir -p $(dir $@)
 
 	$(CC) \
 		$(APP_LD_FLAGS) \
 		-T linker/prog.ld \
-		$(OBJ_CRT_ASM) \
+		$(OBJ_ABIO) \
 		$< \
 		-latu \
+		-lstdc \
 		-L$(SYSROOT_LIB) \
 		-o $@
 
